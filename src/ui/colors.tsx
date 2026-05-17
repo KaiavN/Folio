@@ -1,6 +1,125 @@
 import React, { createContext, useContext } from "react";
 import { useColorScheme } from "react-native";
 
+// =============================================================================
+// SPACING SCALE — semantic tokens for consistent spacing
+// =============================================================================
+export const spacing = {
+	xxs: 4,
+	xs: 8,
+	sm: 12,
+	md: 16,
+	lg: 20,
+	xl: 24,
+	xxl: 32,
+	xxxl: 48,
+	xxxxl: 64,
+} as const;
+
+// =============================================================================
+// TYPOGRAPHY SCALE — consistent text sizing and line heights
+// =============================================================================
+export const typography = {
+	caption: {
+		fontSize: 12,
+		lineHeight: 16,
+		fontWeight: "400" as const,
+	},
+	body: {
+		fontSize: 15,
+		lineHeight: 21, // 1.4x
+		fontWeight: "400" as const,
+	},
+	subtitle: {
+		fontSize: 17,
+		lineHeight: 24,
+		fontWeight: "500" as const,
+	},
+	title: {
+		fontSize: 22,
+		lineHeight: 28,
+		fontWeight: "700" as const,
+	},
+	hero: {
+		fontSize: 34,
+		lineHeight: 44,
+		fontWeight: "800" as const,
+	},
+	heroLarge: {
+		fontSize: 38,
+		lineHeight: 46,
+		fontWeight: "800" as const,
+	},
+} as const;
+
+// =============================================================================
+// ELEVATION / SHADOW SYSTEM — depth through shadows, not flat design
+// =============================================================================
+export const elevation = {
+	subtle: {
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.12,
+		shadowRadius: 4,
+		elevation: 3,
+	},
+	medium: {
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.18,
+		shadowRadius: 12,
+		elevation: 6,
+	},
+	elevated: {
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 8 },
+		shadowOpacity: 0.22,
+		shadowRadius: 24,
+		elevation: 12,
+	},
+} as const;
+
+// =============================================================================
+// BORDER RADIUS TOKENS — consistent rounded corners
+// =============================================================================
+export const borderRadius = {
+	sm: 12,
+	md: 16,
+	lg: 22,
+	xl: 28,
+	full: 999,
+} as const;
+
+// =============================================================================
+// ANIMATION TIMING — consistent motion duration
+// =============================================================================
+export const animation = {
+	fast: 150,
+	normal: 250,
+	slow: 400,
+} as const;
+
+// =============================================================================
+// SPRING CONFIG — physics-based motion for native feel
+// =============================================================================
+export const spring = {
+	modal: {
+		damping: 15,
+		stiffness: 150,
+	},
+	button: {
+		damping: 20,
+		stiffness: 300,
+	},
+	entrance: {
+		damping: 18,
+		stiffness: 200,
+	},
+} as const;
+
+// =============================================================================
+// COLOR SCHEMES
+// =============================================================================
 export const darkColors = {
 	bgDeep: "#151310",
 	bgCard: "#1B1713",

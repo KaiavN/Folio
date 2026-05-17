@@ -9,15 +9,12 @@ import {
 	AccessibilityInfo,
 	Clipboard,
 	Easing,
-	Image,
 	KeyboardAvoidingView,
 	Modal,
 	Platform,
 	Pressable,
-	ScrollView,
 	StyleSheet,
 	Text,
-	TextInput,
 	useColorScheme,
 	useWindowDimensions,
 	View,
@@ -79,19 +76,12 @@ import {
 	runSelectionHaptic,
 } from "./src/ui/haptics.ts";
 import { SetupArcade } from "./src/ui/SetupArcade.tsx";
-import {
-	AttachmentChip,
-	ChatBubble,
-	MessageText,
-	StatusPill,
-	TypingBubble,
-	TypingDots,
-} from "./src/ui/ChatComponents.tsx";
 import { ColorsProvider, darkColors } from "./src/ui/colors.tsx";
 import { ModelPicker } from "./src/ui/ModelPicker.tsx";
 import { SetupProgressPanel } from "./src/ui/SetupProgressPanel.tsx";
 import { ModelSelectionCard } from "./src/ui/ModelSelectionCard.tsx";
 import { OnboardingHero } from "./src/ui/OnboardingHero.tsx";
+import { ChatScreen } from "./src/ui/screens/ChatScreen.tsx";
 
 const COLORS = darkColors;
 
@@ -1392,126 +1382,6 @@ export default function App() {
 	}
 
 	function renderOnboardingContent() {
-			<View
-				style={styles.setupProgressPanel}
-				accessible
-				accessibilityRole="progressbar"
-				accessibilityLiveRegion="polite"
-				accessibilityLabel={
-					session?.status === "ready"
-						? "Model setup complete"
-						: isRuntimeBootstrapping
-							? "Model setup is checking this device"
-							: installProgress.phase === "downloading"
-								? `Model download ${Math.round(downloadRatio * 100)} percent complete`
-								: `Model setup ${shortInstallPhaseLabel(installProgress.phase)}`
-				}
-				accessibilityValue={
-					installProgress.phase === "downloading"
-						? {
-								min: 0,
-								max: 100,
-								now: Math.round(downloadRatio * 100),
-							}
-						: undefined
-				}
-			>
-				<View style={styles.setupProgressHeader}>
-					<View style={styles.setupProgressCopy}>
-						<Text style={styles.setupProgressEyebrow}>{progressEyebrow}</Text>
-						<Text
-							style={styles.setupProgressTitleCompact}
-							numberOfLines={2}
-							ellipsizeMode="tail"
-						>
-							{session?.status === "ready"
-								? usedLocalCache
-									? `${featuredModelName} is already on this device`
-									: `${featuredModelName} is ready`
-								: isRuntimeBootstrapping
-									? "Checking what this phone can run"
-									: installStageTitle}
-						</Text>
-					</View>
-					<Text style={styles.setupProgressMetaCompact}>
-						{session?.status === "ready"
-							? "100%"
-							: isRuntimeBootstrapping
-								? "Checking"
-								: installProgress.phase === "downloading"
-									? `${Math.round(downloadRatio * 100)}%`
-									: shortInstallPhaseLabel(installProgress.phase)}
-					</Text>
-				</View>
-				<ProgressBar progress={transferBarProgress} />
-				<View style={styles.installStageRail}>
-					{["Check", "Download", "Verify", "Unpack", "Launch"].map(
-						(label, index) => {
-							const isDone =
-								session?.status === "ready" || index < setupStageIndex;
-							const isActive =
-								session?.status !== "ready" && index === setupStageIndex;
-							return (
-								<View
-									key={label}
-									style={[
-										styles.installStageChip,
-										isActive ? styles.installStageChipActive : null,
-										isDone ? styles.installStageChipDone : null,
-									]}
-								>
-									<Text
-										style={[
-											styles.installStageChipText,
-											isActive || isDone
-												? styles.installStageChipTextStrong
-												: null,
-										]}
-									>
-										{label}
-									</Text>
-								</View>
-							);
-						},
-					)}
-				</View>
-				<Text style={styles.setupProgressBody}>
-					{session?.status === "ready"
-						? usedLocalCache
-							? "Folio found a prepared local copy and opened it without another download."
-							: "Everything is prepared locally. You can move into chat whenever you are ready."
-						: isRuntimeBootstrapping
-							? "Folio is confirming the safest local runtime path for this phone before it commits to download and launch."
-							: installProgress.phase === "downloading"
-								? `${formatTransferProgress(
-										installProgress.transferredBytes,
-										installProgress.totalBytes ??
-											manifest?.packageSizeBytes ??
-											null,
-									)} downloaded`
-								: installStageDetail}
-				</Text>
-			</View>
-		);
-	}
-
-	function renderOnboardingContent() {
-				<Pressable
-					onPress={retrySetup}
-					accessibilityRole="button"
-					accessibilityLabel="Retry model setup"
-					style={({ pressed }) => [
-						styles.secondaryActionButton,
-						pressed ? styles.buttonPressed : null,
-					]}
-				>
-					<Text style={styles.secondaryActionText}>Retry setup</Text>
-				</Pressable>
-			</View>
-		);
-	}
-
-	function renderOnboardingContent() {
 		if (!hasStartedSetup) {
 			return (
 				<View style={styles.stageStack}>
@@ -1717,202 +1587,36 @@ export default function App() {
 						</ScrollView>
 					</View>
 				) : (
-					<View style={styles.chatShell}>
-						<View style={styles.chatTopBar}>
-							<Text style={styles.chatTopBarTitle}>Folio</Text>
-							<Pressable
-								onPress={() => {
-									runSelectionHaptic();
-									setIsModelPickerOpen(true);
-								}}
-								accessibilityRole="button"
-								accessibilityLabel="Choose model"
-								style={({ pressed }) => [
-									styles.chatModelButton,
-									pressed ? styles.buttonPressed : null,
-								]}
-							>
-								<Text
-									style={styles.chatModelButtonText}
-									numberOfLines={1}
-									ellipsizeMode="tail"
-								>
-									{featuredModelName}
-								</Text>
-							</Pressable>
-							<Pressable
-								onPress={() => void handleResetConversation()}
-								disabled={session?.status !== "ready"}
-								accessibilityRole="button"
-								accessibilityLabel="Start a new chat"
-								style={({ pressed }) => [
-									styles.chatNewChatButton,
-									session?.status !== "ready" ? styles.buttonDisabled : null,
-									pressed ? styles.buttonPressed : null,
-								]}
-							>
-								<Text style={styles.chatNewChatButtonText}>New chat</Text>
-							</Pressable>
-						</View>
-
-						{simulatorHint ? (
-							<Text style={styles.inlineNote}>{simulatorHint}</Text>
-						) : null}
-						{errorMessage ? (
-							<Text style={styles.errorText}>{errorMessage}</Text>
-						) : null}
-
-						<View style={styles.chatCard}>
-							<ScrollView
-								ref={messagesScrollRef}
-								style={styles.messagesScroll}
-								contentContainerStyle={[
-									styles.messagesContent,
-									styles.messagesContentGrow,
-								]}
-								keyboardShouldPersistTaps="handled"
-								keyboardDismissMode={
-									Platform.OS === "ios" ? "interactive" : "on-drag"
-								}
-								onContentSizeChange={() => {
-									messagesScrollRef.current?.scrollToEnd({ animated: false });
-								}}
-							>
-								{messages.map((message) => (
-									<ChatBubble
-										key={message.id}
-										message={message}
-										userMaxWidth={userBubbleMaxWidth}
-										assistantMaxWidth={assistantBubbleMaxWidth}
-										onRetry={
-											message.role === "assistant" && message.failed
-												? () => void handleRetryMessage(message.id)
-												: undefined
-										}
-									/>
-								))}
-								{session?.status === "ready" && !hasUserMessages ? (
-									<View style={styles.starterPanel}>
-										<Text style={styles.starterTitle}>Start here</Text>
-										<Text style={styles.starterBody}>
-											Choose a starter or ask anything in your own words.
-										</Text>
-										<View style={styles.starterPromptList}>
-											{QUICK_PROMPTS.map((prompt) => (
-												<Pressable
-													key={prompt}
-													onPress={() => {
-														runSelectionHaptic();
-														void handleSend(prompt);
-													}}
-													disabled={busyAction === "drafting-reply"}
-													style={({ pressed }) => [
-														styles.starterPromptButton,
-														pressed ? styles.buttonPressed : null,
-													]}
-												>
-													<Text style={styles.starterPromptText}>{prompt}</Text>
-												</Pressable>
-											))}
-										</View>
-									</View>
-								) : null}
-								{isInstalling && !messages.length ? (
-									<TypingBubble label="Loading model..." />
-								) : null}
-								{busyAction === "drafting-reply" &&
-								!hasStreamingAssistantText ? (
-									<TypingBubble label="Thinking on-device..." />
-								) : null}
-							</ScrollView>
-						</View>
-
-						<View style={styles.composerCard}>
-							{selectedArtifact.supportsVision ? (
-								<View style={styles.attachmentToolbar}>
-									<Pressable
-										onPress={() => void handlePickAttachment()}
-										disabled={composerDisabled}
-										accessibilityRole="button"
-										accessibilityLabel="Add image from files"
-										style={({ pressed }) => [
-											styles.attachmentAction,
-											composerDisabled ? styles.buttonDisabled : null,
-											pressed ? styles.buttonPressed : null,
-										]}
-									>
-										<Text style={styles.attachmentActionText}>Image</Text>
-									</Pressable>
-									<Pressable
-										onPress={() => void handleCaptureAttachment()}
-										disabled={composerDisabled}
-										accessibilityRole="button"
-										accessibilityLabel="Open camera for image attachment"
-										style={({ pressed }) => [
-											styles.attachmentAction,
-											composerDisabled ? styles.buttonDisabled : null,
-											pressed ? styles.buttonPressed : null,
-										]}
-									>
-										<Text style={styles.attachmentActionText}>Camera</Text>
-									</Pressable>
-								</View>
-							) : null}
-							{composerAttachments.length ? (
-								<View style={styles.composerAttachmentRow}>
-									{composerAttachments.map((attachment) => (
-										<AttachmentChip
-											key={attachment.id}
-											attachment={attachment}
-											removable
-											onRemove={() => setComposerAttachments([])}
-										/>
-									))}
-								</View>
-							) : null}
-							<View style={styles.composerInputRow}>
-								<TextInput
-									value={composer}
-									onChangeText={setComposer}
-									placeholder={
-										isInstalling
-											? "Preparing model…"
-											: `Ask ${featuredModelName} anything`
-									}
-									placeholderTextColor="#7C8799"
-									accessibilityLabel="Message Folio"
-									style={styles.composerInput}
-									editable={!composerDisabled}
-									autoCapitalize="sentences"
-									autoCorrect
-									keyboardAppearance="dark"
-									returnKeyType={Platform.OS === "ios" ? "send" : "default"}
-									textAlignVertical="top"
-									multiline
-								/>
-								<Pressable
-									onPress={() =>
-										canStopGeneration
-											? void handleInterruptGeneration()
-											: void handleSend()
-									}
-									disabled={canStopGeneration ? false : !canSend}
-									accessibilityRole="button"
-									accessibilityLabel={
-										canStopGeneration ? "Stop generation" : "Send message"
-									}
-									style={({ pressed }) => [
-										styles.sendButton,
-										!(canStopGeneration || canSend) && styles.buttonDisabled,
-										canStopGeneration ? styles.stopButton : null,
-										pressed ? styles.buttonPressed : null,
-									]}
-								>
-									<Text style={styles.sendButtonText}>{sendButtonLabel}</Text>
-								</Pressable>
-							</View>
-						</View>
-					</View>
+					<ChatScreen
+						messages={messages}
+						composer={composer}
+						composerAttachments={composerAttachments}
+						busyAction={busyAction}
+						composerDisabled={composerDisabled}
+						canSend={canSend}
+						canStopGeneration={canStopGeneration}
+						sendButtonLabel={sendButtonLabel}
+						featuredModelName={featuredModelName}
+						simulatorHint={simulatorHint}
+						isInstalling={isInstalling}
+						hasUserMessages={hasUserMessages}
+						hasStreamingAssistantText={hasStreamingAssistantText}
+						userBubbleMaxWidth={userBubbleMaxWidth}
+						assistantBubbleMaxWidth={assistantBubbleMaxWidth}
+						onComposerChange={setComposer}
+						onSend={() => void handleSend()}
+						onStopGeneration={() => void handleInterruptGeneration()}
+						onRetryMessage={handleRetryMessage}
+						onPickAttachment={handlePickAttachment}
+						onCaptureAttachment={handleCaptureAttachment}
+						onRemoveAttachment={(id) => setComposerAttachments([])}
+						onResetConversation={handleResetConversation}
+						onOpenModelPicker={() => {
+							runSelectionHaptic();
+							setIsModelPickerOpen(true);
+						}}
+						supportsVision={selectedArtifact.supportsVision}
+					/>
 				)}
 			</KeyboardAvoidingView>
 
@@ -2876,14 +2580,19 @@ const styles = StyleSheet.create({
 	typingDotsRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 5,
-		paddingLeft: 2,
+		gap: 6,
 	},
 	typingDot: {
-		width: 6,
-		height: 6,
+		width: 8,
+		height: 8,
 		borderRadius: 999,
 		backgroundColor: COLORS.textTertiary,
+	},
+	typingBubbleContainer: {
+		backgroundColor: COLORS.bgCard,
+		borderRadius: 24,
+		padding: 16,
+		...elevation.medium,
 	},
 	typingText: {
 		color: COLORS.textTertiary,

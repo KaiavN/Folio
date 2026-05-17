@@ -8,11 +8,12 @@ import {
 	StyleSheet,
 	Text,
 	View,
+	AccessibilityInfo,
 } from "react-native";
 
 import type { ChatAttachment, ChatMessage } from "../engine/types.ts";
 import { runImpactHaptic, runSelectionHaptic } from "./haptics.ts";
-import { darkColors } from "./colors.tsx";
+import { darkColors, elevation } from "./colors.tsx";
 
 const COLORS = darkColors;
 
@@ -182,16 +183,14 @@ export function AttachmentChip({
 export function TypingBubble({ label }: { label: string }) {
 	return (
 		<View
-			style={stylesBubble.messageRowAssistant}
+			style={stylesBubble.typingBubbleContainer}
 			accessibilityRole="text"
 			accessibilityLiveRegion="polite"
 			accessibilityLabel={label}
 		>
-			<View style={[stylesBubble.messageBubble, stylesBubble.assistantBubble]}>
-				<View style={stylesBubble.typingRow}>
-					<TypingDots />
-					<Text style={stylesBubble.typingText}>{label}</Text>
-				</View>
+			<View style={stylesBubble.typingRow}>
+				<TypingDots />
+				<Text style={stylesBubble.typingText}>{label}</Text>
 			</View>
 		</View>
 	);
@@ -227,41 +226,69 @@ export function MessageText({ text, isUser }: { text: string; isUser: boolean })
 // --- TypingDots ---
 
 export function TypingDots() {
-	const opacity1 = useRef(new Animated.Value(0.3)).current;
-	const opacity2 = useRef(new Animated.Value(0.3)).current;
-	const opacity3 = useRef(new Animated.Value(0.3)).current;
-	const opacities = [opacity1, opacity2, opacity3];
+	const bounce1 = useRef(new Animated.Value(0)).current;
+	const bounce2 = useRef(new Animated.Value(0)).current;
+	const bounce3 = useRef(new Animated.Value(0)).current;
 
 	useEffect(() => {
-		const loop = Animated.loop(
-			Animated.stagger(
-				180,
-				opacities.map((opacity) =>
-					Animated.sequence([
-						Animated.timing(opacity, {
-							toValue: 0.8,
-							duration: 180,
-							useNativeDriver: true,
-						}),
-						Animated.timing(opacity, {
-							toValue: 0.3,
-							duration: 180,
-							useNativeDriver: true,
-						}),
-					]),
+		let cancelled = false;
+		let loop: Animated.CompositeAnimation | null = null;
+
+		async function startAnimation() {
+			const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
+			if (cancelled) return;
+
+			if (isReduceMotionEnabled) return;
+
+			loop = Animated.loop(
+				Animated.stagger(
+					180,
+					[bounce1, bounce2, bounce3].map((bounce) =>
+						Animated.sequence([
+							Animated.spring(bounce, {
+								toValue: 1,
+								damping: 12,
+								stiffness: 180,
+								useNativeDriver: true,
+							}),
+							Animated.spring(bounce, {
+								toValue: 0,
+								damping: 12,
+								stiffness: 180,
+								useNativeDriver: true,
+							}),
+						]),
+					),
 				),
-			),
-		);
-		loop.start();
-		return () => loop.stop();
-	}, [opacities]);
+			);
+			loop.start();
+		}
+
+		startAnimation();
+		return () => {
+			cancelled = true;
+			loop?.stop();
+		};
+	}, [bounce1, bounce2, bounce3]);
 
 	return (
 		<View style={stylesBubble.typingDotsRow}>
-			{opacities.map((opacity, index) => (
+			{[bounce1, bounce2, bounce3].map((bounce, index) => (
 				<Animated.View
 					key={index}
-					style={[stylesBubble.typingDot, { opacity }]}
+					style={[
+						stylesBubble.typingDot,
+						{
+							transform: [
+								{
+									translateY: bounce.interpolate({
+										inputRange: [0, 1],
+										outputRange: [0, -4],
+									}),
+								},
+							],
+						},
+					]}
 				/>
 			))}
 		</View>
@@ -379,17 +406,22 @@ const stylesBubble = StyleSheet.create({
 	typingDotsRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 5,
-		paddingLeft: 2,
+		gap: 6,
 	},
 	typingDot: {
-		width: 6,
-		height: 6,
+		width: 8,
+		height: 8,
 		borderRadius: 999,
-		backgroundColor: "#9F9586",
+		backgroundColor: COLORS.textTertiary,
+	},
+	typingBubbleContainer: {
+		backgroundColor: COLORS.bgCard,
+		borderRadius: 24,
+		padding: 16,
+		...elevation.medium,
 	},
 	typingText: {
-		color: "#9F9586",
+		color: COLORS.textTertiary,
 		fontSize: 13,
 		lineHeight: 18,
 	},
