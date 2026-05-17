@@ -11,7 +11,7 @@ import {
   runImpactHaptic,
   runSelectionHaptic,
 } from "./haptics.ts";
-import { darkColors as COLORS } from "./colors.ts";
+import { darkColors as COLORS } from "./colors.tsx";
 
 type Message = {
   id: string;

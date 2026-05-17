@@ -79,9 +79,21 @@ import {
 	runSelectionHaptic,
 } from "./src/ui/haptics.ts";
 import { SetupArcade } from "./src/ui/SetupArcade.tsx";
-import { useColors } from "./src/ui/colors.ts";
+import {
+	AttachmentChip,
+	ChatBubble,
+	MessageText,
+	StatusPill,
+	TypingBubble,
+	TypingDots,
+} from "./src/ui/ChatComponents.tsx";
+import { ColorsProvider, darkColors } from "./src/ui/colors.tsx";
+import { ModelPicker } from "./src/ui/ModelPicker.tsx";
+import { SetupProgressPanel } from "./src/ui/SetupProgressPanel.tsx";
+import { ModelSelectionCard } from "./src/ui/ModelSelectionCard.tsx";
+import { OnboardingHero } from "./src/ui/OnboardingHero.tsx";
 
-const COLORS = useColors(); // module-level for styles; component uses useColors() for runtime adaptation
+const COLORS = darkColors;
 
 
 const SETUP_STATE_FILE = new File(Paths.document, "folio-setup.json");
@@ -1356,51 +1368,30 @@ export default function App() {
 		setOnboardingStage(session?.status === "ready" ? "chat" : "waiting");
 	}
 
-	function renderSetupStatusCard() {
-		const usedLocalCache = installedArtifact?.cacheState === "hit";
-		const transferBarProgress =
-			session?.status === "ready"
-				? 1
-				: isRuntimeBootstrapping
-					? 0.04
-					: installProgress.phase === "checking-cache"
-						? 0.05
-						: installProgress.phase === "downloading"
-							? 0.12 + downloadRatio * 0.56
-							: installProgress.phase === "verifying-package"
-								? 0.76
-								: installProgress.phase === "extracting"
-									? 0.9
-									: 0.97;
-		const setupStageIndex = isRuntimeBootstrapping
-			? 0
-			: installProgress.phase === "checking-cache"
-				? 0
-				: installProgress.phase === "downloading"
-					? 1
-					: installProgress.phase === "verifying-package"
-						? 2
-						: installProgress.phase === "extracting"
-							? 3
-							: 4;
-		const progressEyebrow =
-			session?.status === "ready"
-				? usedLocalCache
-					? "Ready from local cache"
-					: "Ready"
-				: isRuntimeBootstrapping
-					? "Checking this device first"
-					: installProgress.phase === "checking-cache"
-						? "Checking what is already on this phone"
-						: installProgress.phase === "downloading"
-							? "Downloading with live progress"
-							: installProgress.phase === "verifying-package"
-								? "Download complete"
-								: installProgress.phase === "extracting"
-									? "Unpacking locally"
-									: "Launching the local runtime";
+	function renderSetupErrorCard() {
+		if (!errorMessage) {
+			return null;
+		}
 
 		return (
+			<View style={styles.inlineErrorCard}>
+				<Text style={styles.errorText}>{errorMessage}</Text>
+				<Pressable
+					onPress={retrySetup}
+					accessibilityRole="button"
+					accessibilityLabel="Retry model setup"
+					style={({ pressed }) => [
+						styles.secondaryActionButton,
+						pressed ? styles.buttonPressed : null,
+					]}
+				>
+					<Text style={styles.secondaryActionText}>Try again</Text>
+				</Pressable>
+			</View>
+		);
+	}
+
+	function renderOnboardingContent() {
 			<View
 				style={styles.setupProgressPanel}
 				accessible
@@ -1504,14 +1495,7 @@ export default function App() {
 		);
 	}
 
-	function renderSetupErrorCard() {
-		if (!errorMessage) {
-			return null;
-		}
-
-		return (
-			<View style={styles.inlineErrorCard}>
-				<Text style={styles.errorText}>{errorMessage}</Text>
+	function renderOnboardingContent() {
 				<Pressable
 					onPress={retrySetup}
 					accessibilityRole="button"
@@ -1531,58 +1515,20 @@ export default function App() {
 		if (!hasStartedSetup) {
 			return (
 				<View style={styles.stageStack}>
-					<View style={styles.selectionHero}>
-						<Text style={styles.selectionEyebrow}>
-							Private AI on your phone
-						</Text>
-						<Text style={styles.selectionTitle}>Choose your model</Text>
-						<Text style={styles.selectionIntro}>{selectionIntroCopy}</Text>
-					</View>
+					<OnboardingHero
+						eyebrow="Private AI on your phone"
+						title="Choose your model"
+						intro={selectionIntroCopy}
+					/>
 
-					<Pressable
-						onPress={startFeaturedSetup}
-						accessibilityRole="button"
-						accessibilityLabel={
-							isArtifactInstalled
-								? `Open ${featuredModelName}`
-								: `Download ${featuredModelName}`
-						}
-						style={({ pressed }) => [
-							styles.selectionCard,
-							styles.selectionCardPrimary,
-							pressed ? styles.buttonPressed : null,
-						]}
-					>
-						<View style={styles.selectionCardHeader}>
-							<Text
-								style={styles.selectionCardTitle}
-								numberOfLines={2}
-								ellipsizeMode="tail"
-							>
-								{featuredModelName}
-							</Text>
-							<StatusPill
-								label={isArtifactInstalled ? "Installed" : "Available now"}
-								tone="success"
-							/>
-						</View>
-						<Text style={styles.selectionCardMeta}>
-							{featuredArtifact.sizeLabel} • ~{featuredArtifact.estimatedSizeGb}{" "}
-							GB
-						</Text>
-						<View style={styles.selectionCardFooter}>
-							<Text style={styles.selectionFooterMeta}>
-								{isArtifactInstalled
-									? "Already on this device"
-									: selectionFooterMeta}
-							</Text>
-							<Text style={styles.selectionFooterAction}>
-								{isArtifactInstalled
-									? "Open chat →"
-									: `Download ${featuredModelName} →`}
-							</Text>
-						</View>
-					</Pressable>
+					<ModelSelectionCard
+						modelName={featuredModelName}
+						sizeLabel={featuredArtifact.sizeLabel}
+						estimatedSizeGb={featuredArtifact.estimatedSizeGb}
+						isInstalled={isArtifactInstalled}
+						footerMeta={selectionFooterMeta}
+						onSelect={startFeaturedSetup}
+					/>
 
 					{catalogErrorMessage ? (
 						<Text style={styles.inlineNote}>{catalogErrorMessage}</Text>
@@ -1615,7 +1561,15 @@ export default function App() {
 						</View>
 					</View>
 
-					{renderSetupStatusCard()}
+					<SetupProgressPanel
+						installProgress={installProgress}
+						session={session}
+						manifest={featuredArtifact}
+						featuredModelName={featuredModelName}
+						installedArtifact={installedArtifact}
+						busyAction={busyAction}
+						isRuntimeBootstrapping={isRuntimeBootstrapping}
+					/>
 
 					{shouldShowSimulatorHint ? (
 						<Text style={styles.quietNote}>{simulatorHint}</Text>
@@ -1656,7 +1610,15 @@ export default function App() {
 					</Text>
 				</View>
 
-				{renderSetupStatusCard()}
+				<SetupProgressPanel
+						installProgress={installProgress}
+						session={session}
+						manifest={featuredArtifact}
+						featuredModelName={featuredModelName}
+						installedArtifact={installedArtifact}
+						busyAction={busyAction}
+						isRuntimeBootstrapping={isRuntimeBootstrapping}
+					/>
 
 				{session?.status === "ready" ? (
 					<View style={styles.dualActionRow}>
@@ -1713,6 +1675,7 @@ export default function App() {
 	}
 
 	return (
+		<ColorsProvider>
 		<SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
 			<StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 			<KeyboardAvoidingView
@@ -2019,7 +1982,23 @@ export default function App() {
 					runImpactHaptic("light");
 				}}
 			/>
+			<FallbackPromptModal
+				visible={fallbackOffer !== null}
+				preferredBackendName={routingDecision.selectedArtifact.backend}
+				fallbackBackendName={fallbackOffer?.fallbackArtifact.backend ?? ""}
+				modelName={selectedModelLabel}
+				onAccept={() => {
+					if (!fallbackOffer) return;
+					setForcedFallbackArtifact(fallbackOffer.fallbackArtifact);
+					setFallbackOffer(null);
+					runImpactHaptic("light");
+				}}
+				onDecline={() => {
+					setFallbackOffer(null);
+				}}
+			/>
 		</SafeAreaView>
+		</ColorsProvider>
 	);
 }
 
@@ -2090,474 +2069,7 @@ function FallbackPromptModal({
 	);
 }
 
-function ModelPicker({
-	open,
-	models,
-	featuredArtifactId,
-	catalogErrorMessage,
-	selectedArtifactId,
-	onClose,
-	onSelect,
-}: {
-	open: boolean;
-	models: ModelArtifactDescriptor[];
-	featuredArtifactId: string;
-	catalogErrorMessage: string | null;
-	selectedArtifactId: string;
-	onClose: () => void;
-	onSelect: (artifactId: string) => void;
-}) {
-	const { width: screenWidth } = useWindowDimensions();
-	const isTablet = screenWidth >= 680;
-	const insets = useSafeAreaInsets();
-
-	function isModelAvailable(model: ModelArtifactDescriptor): boolean {
-		return model.artifacts.length > 0;
-	}
-
-	function isSelected(model: ModelArtifactDescriptor): boolean {
-		return model.id === selectedArtifactId;
-	}
-
-	const CAPABILITY_LABELS: Record<string, string> = {
-		fastStartup: "Fast",
-		coding: "Code",
-		vision: "Vision",
-		longContext: "Long Ctx",
-		math: "Math",
-		reasoning: "Reasoning",
-	};
-
-	const sortedModels = [...models].sort((a, b) => {
-		const aAvail = isModelAvailable(a) ? 1 : 0;
-		const bAvail = isModelAvailable(b) ? 1 : 0;
-		if (aAvail !== bAvail) return bAvail - aAvail;
-		const aFeatured = a.id === featuredArtifactId ? 1 : 0;
-		const bFeatured = b.id === featuredArtifactId ? 1 : 0;
-		return bFeatured - aFeatured;
-	});
-
-	return (
-		<Modal
-			transparent
-			visible={open}
-			animationType="slide"
-			onRequestClose={onClose}
-		>
-			<View
-				style={[
-					styles.modalBackdrop,
-					isTablet ? styles.modalBackdropTablet : null,
-				]}
-			>
-				<Pressable
-					style={StyleSheet.absoluteFill}
-					onPress={onClose}
-					accessibilityRole="button"
-					accessibilityLabel="Close model picker"
-				/>
-				<View
-					style={[styles.modalSheet, isTablet ? styles.modalSheetTablet : null]}
-				>
-					<View style={styles.modalHeader}>
-						<Text style={styles.modalTitle}>Choose a model</Text>
-						<Text
-							style={styles.modalSubtitle}
-							numberOfLines={3}
-							ellipsizeMode="tail"
-						>
-							Pick the model that fits your device. Smaller models run faster
-							and use less battery.
-						</Text>
-					</View>
-
-					<ScrollView
-						contentContainerStyle={styles.modalContent}
-					>
-						{catalogErrorMessage ? (
-							<Text style={styles.modalErrorText}>{catalogErrorMessage}</Text>
-						) : null}
-						{sortedModels.map((model) => {
-							const available = isModelAvailable(model);
-							const selected = isSelected(model);
-							return (
-								<Pressable
-									key={model.id}
-									onPress={() => available && onSelect(model.id)}
-									disabled={!available}
-									accessibilityRole="button"
-									accessibilityLabel={`Select ${formatModelDisplayName(model)}`}
-									accessibilityState={{ disabled: !available, selected }}
-									style={({ pressed }) => [
-										styles.modelOption,
-										selected && styles.modelOptionSelected,
-										!available && styles.modelOptionDisabled,
-										pressed && available && styles.buttonPressed,
-									]}
-								>
-									<View
-										style={[
-											styles.modelOptionAccent,
-											selected
-												? styles.modelOptionAccentSelected
-												: available
-													? styles.modelOptionAccentAvailable
-													: styles.modelOptionAccentMuted,
-										]}
-									/>
-									<View style={styles.modelOptionContent}>
-										<View style={styles.modelOptionTopRow}>
-											<View style={styles.modelOptionTitleBlock}>
-												<Text
-													style={styles.modelOptionTitle}
-													numberOfLines={1}
-													ellipsizeMode="tail"
-												>
-													{formatModelDisplayName(model)}
-												</Text>
-												<View style={styles.modelOptionMetaRow}>
-													<View style={styles.modelSizeBadge}>
-														<Text style={styles.modelSizeBadgeText}>
-															{model.sizeLabel}
-														</Text>
-													</View>
-													<Text style={styles.modelOptionSizeText}>
-														~{model.estimatedSizeGb} GB
-													</Text>
-												</View>
-											</View>
-											<View style={styles.modelOptionRight}>
-												{selected ? (
-													<View style={styles.modelCheckCircle}>
-														<Text style={styles.modelCheckMark}>✓</Text>
-													</View>
-												) : available ? (
-													<Text style={styles.modelOptionActionText}>
-														Download →
-													</Text>
-												) : (
-													<View style={styles.modelSoonBadge}>
-														<Text style={styles.modelSoonBadgeText}>Soon</Text>
-													</View>
-												)}
-											</View>
-										</View>
-										<View style={styles.modelBackendRow}>
-											{model.compatibleBackends.map((backend) => (
-												<View
-													key={backend}
-													style={[
-														styles.modelBackendChip,
-														selected && styles.modelBackendChipSelected,
-													]}
-												>
-													<Text
-														style={[
-															styles.modelBackendChipText,
-															selected && styles.modelBackendChipTextSelected,
-														]}
-													>
-														{backend}
-													</Text>
-												</View>
-											))}
-										</View>
-										{model.capabilities?.length ? (
-											<View style={styles.modelCapabilityRow}>
-												{model.capabilities.slice(0, 3).map((cap) => (
-													<View key={cap} style={styles.modelCapabilityChip}>
-														<Text style={styles.modelCapabilityChipText}>
-															{CAPABILITY_LABELS[cap] ?? cap}
-														</Text>
-													</View>
-												))}
-											</View>
-										) : null}
-										<Text
-											style={styles.modelOptionNote}
-											numberOfLines={2}
-											ellipsizeMode="tail"
-										>
-											{model.notes[0]}
-										</Text>
-									</View>
-								</Pressable>
-							);
-						})}
-					</ScrollView>
-				</View>
-			</View>
-		</Modal>
-	);
-}
-const ChatBubble = memo(function ChatBubble({
-	message,
-	userMaxWidth,
-	assistantMaxWidth,
-	onRetry,
-}: {
-	message: ChatMessage;
-	userMaxWidth: number;
-	assistantMaxWidth: number;
-	onRetry?: () => void;
-}) {
-	const isUser = message.role === "user";
-	const entrance = useRef(new Animated.Value(0)).current;
-	const [copied, setCopied] = useState(false);
-
-	useEffect(() => {
-		Animated.timing(entrance, {
-			toValue: 1,
-			duration: 260,
-			easing: Easing.out(Easing.poly(4)),
-			useNativeDriver: true,
-		}).start();
-	}, [entrance]);
-
-	useEffect(() => {
-		if (!copied) return;
-		const t = setTimeout(() => setCopied(false), 1500);
-		return () => clearTimeout(t);
-	}, [copied]);
-
-	const animatedStyle = {
-		opacity: entrance,
-		transform: [
-			{
-				translateY: entrance.interpolate({
-					inputRange: [0, 1],
-					outputRange: [12, 0],
-				}),
-			},
-			{
-				scale: entrance.interpolate({
-					inputRange: [0, 1],
-					outputRange: [0.98, 1],
-				}),
-			},
-		],
-	};
-
-	function handleCopy() {
-		if (!message.text) return;
-		Clipboard.setString(message.text);
-		setCopied(true);
-		runImpactHaptic("soft");
-	}
-
-	return (
-		<Animated.View
-			style={[
-				styles.messageRow,
-				isUser ? styles.messageRowUser : styles.messageRowAssistant,
-				{ maxWidth: isUser ? userMaxWidth : assistantMaxWidth },
-				animatedStyle,
-			]}
-		>
-			<Pressable
-				onLongPress={!isUser ? handleCopy : undefined}
-				delayLongPress={350}
-				accessibilityRole="text"
-				accessibilityLabel={
-					isUser ? `You said: ${message.text}` : `Folio said: ${message.text}`
-				}
-			>
-				<View
-					style={[
-						styles.messageBubble,
-						isUser ? styles.userBubble : styles.assistantBubble,
-					]}
-				>
-					{message.attachments?.length ? (
-						<View style={styles.messageAttachmentRow}>
-							{message.attachments.map((attachment) => (
-								<AttachmentChip key={attachment.id} attachment={attachment} />
-							))}
-						</View>
-					) : null}
-					<MessageText text={message.text} isUser={isUser} />
-					{message.meta ? (
-						<Text style={styles.messageMeta}>{message.meta}</Text>
-					) : null}
-					{!isUser && message.failed && onRetry ? (
-						<Pressable
-							onPress={onRetry}
-							accessibilityRole="button"
-							accessibilityLabel="Retry generating this reply"
-							style={({ pressed }) => [
-								styles.retryButton,
-								pressed ? styles.buttonPressed : null,
-							]}
-						>
-							<Text style={styles.retryButtonText}>Retry</Text>
-						</Pressable>
-					) : null}
-					{!isUser && copied ? (
-						<Text style={styles.copyToast}>Copied</Text>
-					) : null}
-				</View>
-			</Pressable>
-		</Animated.View>
-	);
-});
-
-function AttachmentChip({
-	attachment,
-	removable = false,
-	onRemove,
-}: {
-	attachment: ChatAttachment;
-	removable?: boolean;
-	onRemove?: () => void;
-}) {
-	return (
-		<View style={styles.attachmentChip}>
-			<Image
-				source={{ uri: attachment.localUri }}
-				style={styles.attachmentChipThumbnail}
-			/>
-			<View style={styles.attachmentChipTextBlock}>
-				<Text style={styles.attachmentChipTitle}>{attachment.name}</Text>
-				<Text style={styles.attachmentChipMeta}>
-					{attachment.source === "camera" ? "Camera capture" : "Uploaded file"}
-					{attachment.width && attachment.height
-						? ` • ${attachment.width}x${attachment.height}`
-						: ""}
-				</Text>
-			</View>
-			{removable ? (
-				<Pressable
-					onPress={() => {
-						runSelectionHaptic();
-						onRemove?.();
-					}}
-					accessibilityRole="button"
-					accessibilityLabel={`Remove ${attachment.name}`}
-					style={({ pressed }) => [pressed ? styles.buttonPressed : null]}
-				>
-					<Text style={styles.attachmentChipRemove}>Remove</Text>
-				</Pressable>
-			) : null}
-		</View>
-	);
-}
-
-function TypingBubble({ label }: { label: string }) {
-	return (
-		<View
-			style={styles.messageRowAssistant}
-			accessibilityRole="text"
-			accessibilityLiveRegion="polite"
-			accessibilityLabel={label}
-		>
-			<View style={[styles.messageBubble, styles.assistantBubble]}>
-				<View style={styles.typingRow}>
-					<TypingDots />
-					<Text style={styles.typingText}>{label}</Text>
-				</View>
-			</View>
-		</View>
-	);
-}
-
-function MessageText({ text, isUser }: { text: string; isUser: boolean }) {
-	const paragraphs = text
-		.split(/\n{2,}/)
-		.filter((paragraph) => paragraph.trim().length > 0);
-	const content = paragraphs.length ? paragraphs : [text];
-
-	return (
-		<View style={styles.messageParagraphGroup}>
-			{content.map((paragraph, index) => (
-				<Text
-					key={index}
-					selectable={!isUser}
-					style={[
-						styles.messageText,
-						isUser ? styles.userMessageText : styles.assistantMessageText,
-						index < content.length - 1 ? styles.messageParagraph : null,
-					]}
-				>
-					{paragraph}
-				</Text>
-			))}
-		</View>
-	);
-}
-
-function TypingDots() {
-	const opacity1 = useRef(new Animated.Value(0.3)).current;
-	const opacity2 = useRef(new Animated.Value(0.3)).current;
-	const opacity3 = useRef(new Animated.Value(0.3)).current;
-	const opacities = [opacity1, opacity2, opacity3];
-
-	useEffect(() => {
-		const loop = Animated.loop(
-			Animated.stagger(
-				180,
-				opacities.map((opacity) =>
-					Animated.sequence([
-						Animated.timing(opacity, {
-							toValue: 0.8,
-							duration: 180,
-							useNativeDriver: true,
-						}),
-						Animated.timing(opacity, {
-							toValue: 0.3,
-							duration: 180,
-							useNativeDriver: true,
-						}),
-					]),
-				),
-			),
-		);
-		loop.start();
-		return () => loop.stop();
-	}, [opacities]);
-
-	return (
-		<View style={styles.typingDotsRow}>
-			{opacities.map((opacity, index) => (
-				<Animated.View
-					key={index}
-					style={[styles.typingDot, { opacity }]}
-				/>
-			))}
-		</View>
-	);
-}
-
-function StatusPill({
-	label,
-	tone,
-}: {
-	label: string;
-	tone: "default" | "success" | "muted";
-}) {
-	return (
-		<View
-			style={[
-				styles.statusPill,
-				tone === "success" ? styles.statusPillSuccess : null,
-				tone === "muted" ? styles.statusPillMuted : null,
-			]}
-			accessibilityRole="text"
-			accessibilityLabel={`Status: ${label}`}
-		>
-			<Text
-				style={[
-					styles.statusPillText,
-					tone === "success" ? styles.statusPillTextSuccess : null,
-					tone === "muted" ? styles.statusPillTextMuted : null,
-				]}
-			>
-				{label}
-			</Text>
-		</View>
-	);
-}
-
-function buildReadyMessages(
+function buildWelcomeMessages(
 	artifact: ModelArtifactDescriptor,
 	backendId: string,
 	telemetry: TelemetrySnapshot,
@@ -2876,7 +2388,7 @@ const styles = StyleSheet.create({
 		textTransform: "uppercase",
 	},
 	brandSubtitle: {
-		color: "#B8B0A2",
+		color: COLORS.textTertiary,
 		fontSize: 14,
 		lineHeight: 20,
 	},
@@ -2949,7 +2461,7 @@ const styles = StyleSheet.create({
 		lineHeight: 27,
 	},
 	selectionCardMeta: {
-		color: "#D8D0C4",
+		color: COLORS.textSecondary,
 		fontSize: 14,
 	},
 	selectionCardFooter: {
@@ -2960,7 +2472,7 @@ const styles = StyleSheet.create({
 		paddingTop: 8,
 	},
 	selectionFooterMeta: {
-		color: "#B3A793",
+		color: COLORS.textTertiary,
 		fontSize: 12,
 		fontWeight: "700",
 	},
@@ -2980,7 +2492,7 @@ const styles = StyleSheet.create({
 		gap: 12,
 	},
 	inlineActionText: {
-		color: "#E7D7C0",
+		color: COLORS.accentPrimary,
 		fontSize: 13,
 		fontWeight: "700",
 	},
@@ -3014,7 +2526,7 @@ const styles = StyleSheet.create({
 		lineHeight: 22,
 	},
 	setupProgressMetaCompact: {
-		color: "#E7D7C0",
+		color: COLORS.accentPrimary,
 		fontSize: 12,
 		fontWeight: "800",
 	},
@@ -3044,7 +2556,7 @@ const styles = StyleSheet.create({
 		letterSpacing: 1.1,
 	},
 	quietNote: {
-		color: "#BFB3A1",
+		color: COLORS.textSecondary,
 		fontSize: 13,
 		lineHeight: 19,
 	},
@@ -3058,7 +2570,7 @@ const styles = StyleSheet.create({
 		minWidth: 140,
 	},
 	primaryActionText: {
-		color: "#231B14",
+		color: COLORS.chipTextOnAccent,
 		fontSize: 15,
 		fontWeight: "800",
 	},
@@ -3081,7 +2593,7 @@ const styles = StyleSheet.create({
 		gap: 2,
 	},
 	tradeoffLabel: {
-		color: "#EFE7DB",
+		color: COLORS.textPrimary,
 		fontSize: 13,
 		fontWeight: "800",
 	},
@@ -3131,7 +2643,7 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 	},
 	installStageChipTextStrong: {
-		color: "#2A211A",
+		color: COLORS.chipTextOnAccent,
 	},
 	chatTopBar: {
 		flexDirection: "row",
@@ -3151,7 +2663,7 @@ const styles = StyleSheet.create({
 	chatModelButton: {
 		flex: 1,
 		minWidth: 0,
-		backgroundColor: "#1B1815",
+		backgroundColor: COLORS.bgCard,
 		borderRadius: 16,
 		paddingHorizontal: 12,
 		paddingVertical: 10,
@@ -3172,7 +2684,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	chatNewChatButtonText: {
-		color: "#E7DED1",
+		color: COLORS.textPrimary,
 		fontSize: 13,
 		fontWeight: "800",
 	},
@@ -3184,7 +2696,7 @@ const styles = StyleSheet.create({
 		paddingTop: 2,
 	},
 	modelSwitcherButton: {
-		backgroundColor: "#1E1A16",
+		backgroundColor: COLORS.border,
 		borderColor: "rgba(215, 193, 162, 0.14)",
 		borderWidth: 1,
 		borderRadius: 18,
@@ -3208,7 +2720,7 @@ const styles = StyleSheet.create({
 		maxWidth: 160,
 	},
 	inlineNote: {
-		color: "#BFB3A1",
+		color: COLORS.textSecondary,
 		fontSize: 13,
 		lineHeight: 19,
 	},
@@ -3225,7 +2737,7 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 248, 235, 0.08)",
 	},
 	statusPillText: {
-		color: "#E7DED1",
+		color: COLORS.textPrimary,
 		fontSize: 11,
 		fontWeight: "700",
 	},
@@ -3233,7 +2745,7 @@ const styles = StyleSheet.create({
 		color: COLORS.successText,
 	},
 	statusPillTextMuted: {
-		color: "#C4BBAD",
+		color: COLORS.textTertiary,
 	},
 	errorText: {
 		color: COLORS.errorText,
@@ -3277,13 +2789,13 @@ const styles = StyleSheet.create({
 		marginTop: 6,
 	},
 	starterPromptButton: {
-		backgroundColor: "#1B1915",
+		backgroundColor: COLORS.bgCard,
 		borderRadius: 16,
 		paddingHorizontal: 12,
 		paddingVertical: 10,
 	},
 	starterPromptText: {
-		color: "#E7DED1",
+		color: COLORS.textPrimary,
 		fontSize: 13,
 		lineHeight: 18,
 		fontWeight: "600",
@@ -3327,13 +2839,13 @@ const styles = StyleSheet.create({
 		gap: 8,
 	},
 	assistantMessageText: {
-		color: "#F0E8DC",
+		color: COLORS.accentOnDark,
 	},
 	userMessageText: {
 		color: COLORS.accentOnDark,
 	},
 	messageMeta: {
-		color: "#9F9586",
+		color: COLORS.textTertiary,
 		fontSize: 11,
 		lineHeight: 15,
 	},
@@ -3371,10 +2883,10 @@ const styles = StyleSheet.create({
 		width: 6,
 		height: 6,
 		borderRadius: 999,
-		backgroundColor: "#9F9586",
+		backgroundColor: COLORS.textTertiary,
 	},
 	typingText: {
-		color: "#9F9586",
+		color: COLORS.textTertiary,
 		fontSize: 13,
 		lineHeight: 18,
 	},
@@ -3398,7 +2910,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	attachmentActionText: {
-		color: "#EFE7DB",
+		color: COLORS.textPrimary,
 		fontSize: 13,
 		fontWeight: "700",
 	},
@@ -3430,10 +2942,10 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	stopButton: {
-		backgroundColor: "#C8927C",
+		backgroundColor: COLORS.errorText,
 	},
 	sendButtonText: {
-		color: "#231B14",
+		color: COLORS.chipTextOnAccent,
 		fontWeight: "800",
 		fontSize: 14,
 	},
@@ -3462,11 +2974,11 @@ const styles = StyleSheet.create({
 		fontWeight: "700",
 	},
 	attachmentChipMeta: {
-		color: "#B7AD9E",
+		color: COLORS.textTertiary,
 		fontSize: 10,
 	},
 	attachmentChipRemove: {
-		color: "#E7D7C0",
+		color: COLORS.accentPrimary,
 		fontSize: 12,
 		fontWeight: "700",
 	},
@@ -3481,7 +2993,7 @@ const styles = StyleSheet.create({
 	},
 	modalSheet: {
 		maxHeight: "78%",
-		backgroundColor: "#15120F",
+		backgroundColor: COLORS.bgDeep,
 		borderTopLeftRadius: 24,
 		borderTopRightRadius: 24,
 		paddingHorizontal: 18,
@@ -3505,7 +3017,7 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 	},
 	modalSubtitle: {
-		color: "#B8B0A2",
+		color: COLORS.textTertiary,
 		fontSize: 14,
 		lineHeight: 20,
 		flexShrink: 1,
@@ -3519,18 +3031,18 @@ const styles = StyleSheet.create({
 		gap: 12,
 	},
 	modalErrorText: {
-		color: "#FCA5A5",
+		color: COLORS.errorText,
 		fontSize: 13,
 		lineHeight: 18,
 	},
 	modelOption: {
 		flexDirection: "row",
-		backgroundColor: "#1B1815",
+		backgroundColor: COLORS.bgCard,
 		borderRadius: 18,
 		overflow: "hidden",
 	},
 	modelOptionSelected: {
-		backgroundColor: "#252019",
+		backgroundColor: COLORS.bgCardRich,
 	},
 	modelOptionDisabled: {
 		opacity: 0.55,
@@ -3586,7 +3098,7 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 	},
 	modelOptionSizeText: {
-		color: "#9F9586",
+		color: COLORS.textTertiary,
 		fontSize: 12,
 		fontWeight: "700",
 	},
@@ -3604,7 +3116,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	modelCheckMark: {
-		color: "#231B14",
+		color: COLORS.chipTextOnAccent,
 		fontSize: 14,
 		fontWeight: "800",
 	},
@@ -3641,14 +3153,14 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(231, 215, 192, 0.16)",
 	},
 	modelBackendChipText: {
-		color: "#B8B0A2",
+		color: COLORS.textTertiary,
 		fontSize: 11,
 		fontWeight: "700",
 		textTransform: "uppercase",
 		letterSpacing: 0.5,
 	},
 	modelBackendChipTextSelected: {
-		color: "#E7DED1",
+		color: COLORS.textPrimary,
 	},
 	modelCapabilityRow: {
 		flexDirection: "row",
@@ -3663,7 +3175,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 3,
 	},
 	modelCapabilityChipText: {
-		color: "#D6FF5F",
+		color: COLORS.accentLime,
 		fontSize: 11,
 		fontWeight: "700",
 	},

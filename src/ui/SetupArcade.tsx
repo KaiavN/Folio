@@ -19,7 +19,7 @@ import {
 	runNotificationHaptic,
 	runSelectionHaptic,
 } from "./haptics.ts";
-import { darkColors as COLORS, useColors } from "./colors.ts";
+import { useColors } from "./colors.tsx";
 
 type ArcadeGame = "tic-tac-toe" | "pong";
 type Mark = "X" | "O" | null;
@@ -64,6 +64,7 @@ type PongState = {
 };
 
 export function SetupArcade() {
+	const COLORS = useColors();
 	const [activeGame, setActiveGame] = useState<ArcadeGame>("tic-tac-toe");
 	const activeGameCopy =
 		activeGame === "tic-tac-toe"
@@ -800,7 +801,7 @@ const styles = StyleSheet.create({
 		backgroundColor: COLORS.accentPrimary,
 	},
 	switcherText: {
-		color: "#BDAF9D",
+		color: COLORS.textSecondary,
 		fontSize: 13,
 		fontWeight: "700",
 	},
@@ -812,7 +813,7 @@ const styles = StyleSheet.create({
 		backgroundColor: COLORS.bgCard,
 		borderRadius: 24,
 		borderWidth: 1,
-		borderColor: "rgba(231, 215, 192, 0.1)",
+		borderColor: COLORS.borderMed,
 		padding: 16,
 	},
 	gameHeader: {
@@ -840,7 +841,7 @@ const styles = StyleSheet.create({
 		backgroundColor: COLORS.bgSubtleMid,
 	},
 	scoreChipLabel: {
-		color: "#9F9586",
+		color: COLORS.textTertiary,
 		fontSize: 11,
 		fontWeight: "700",
 		textTransform: "uppercase",
@@ -862,12 +863,12 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 		borderRadius: 20,
-		backgroundColor: "rgba(255, 248, 235, 0.06)",
+		backgroundColor: COLORS.bgSubtle,
 		borderWidth: 1,
 		borderColor: COLORS.border,
 	},
 	ticTacToeCellFilled: {
-		backgroundColor: "rgba(231, 215, 192, 0.12)",
+		backgroundColor: COLORS.bgSubtleMid,
 	},
 	ticTacToeCellInner: {
 		width: "100%",
@@ -875,7 +876,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	ticTacToeCellText: {
-		color: "#E7D7C0",
+		color: COLORS.accentPrimary,
 		fontSize: 28,
 		lineHeight: 30,
 		fontWeight: "800",
@@ -884,7 +885,7 @@ const styles = StyleSheet.create({
 		transform: [{ translateY: -1 }],
 	},
 	ticTacToeCellTextMuted: {
-		color: "#D6FF5F",
+		color: COLORS.accentLime,
 	},
 	pongCourt: {
 		width: "100%",
@@ -905,7 +906,7 @@ const styles = StyleSheet.create({
 		top: 0,
 		bottom: 0,
 		width: 2,
-		backgroundColor: "rgba(231, 215, 192, 0.08)",
+		backgroundColor: COLORS.borderMed,
 	},
 	pongPaddle: {
 		position: "absolute",
@@ -926,7 +927,7 @@ const styles = StyleSheet.create({
 		width: BALL_SIZE,
 		height: BALL_SIZE,
 		borderRadius: 999,
-		backgroundColor: "#F6F1E8",
+		backgroundColor: COLORS.textPrimary,
 	},
 	gameFooter: {
 		flexDirection: "row",
@@ -957,9 +958,9 @@ const styles = StyleSheet.create({
 		bottom: 5,
 		width: TOUCH_THUMB_WIDTH,
 		borderRadius: 999,
-		backgroundColor: "rgba(231, 215, 192, 0.18)",
+		backgroundColor: COLORS.borderMed,
 		borderWidth: 1,
-		borderColor: "rgba(231, 215, 192, 0.24)",
+		borderColor: COLORS.border,
 	},
 	pongTouchHint: {
 		color: COLORS.textPrimary,
@@ -981,7 +982,7 @@ const styles = StyleSheet.create({
 		borderRadius: 16,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(255, 248, 235, 0.07)",
+		backgroundColor: COLORS.bgSubtle,
 	},
 	controlButtonPrimary: {
 		backgroundColor: COLORS.accentPrimary,
@@ -998,7 +999,7 @@ const styles = StyleSheet.create({
 		borderRadius: 999,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "rgba(255, 248, 235, 0.07)",
+		backgroundColor: COLORS.bgSubtle,
 	},
 	resetButtonText: {
 		color: COLORS.textPrimary,
