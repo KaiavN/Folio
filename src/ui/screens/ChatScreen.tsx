@@ -225,11 +225,7 @@ export function ChatScreen({
 							message={message}
 							userMaxWidth={userBubbleMaxWidth}
 							assistantMaxWidth={assistantBubbleMaxWidth}
-							onRetry={
-								message.role === "assistant" && message.failed
-									? () => handleRetry(message.id)
-									: undefined
-							}
+							onRetry={handleRetry}
 						/>
 					))}
 
