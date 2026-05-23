@@ -259,14 +259,14 @@ export function TypingDots() {
 	const bounce3 = useRef(new Animated.Value(0)).current;
 
 	useEffect(() => {
-		let cancelled = false;
-		let loop: Animated.CompositeAnimation | null = null;
+		const cancelled = { value: false };
+		const loopRef = { current: null as Animated.CompositeAnimation | null };
 		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
 		function startAnimation() {
 			AccessibilityInfo.isReduceMotionEnabled().then((isReduceMotionEnabled) => {
-				if (cancelled || isReduceMotionEnabled) return;
-				loop = Animated.loop(
+				if (cancelled.value || isReduceMotionEnabled) return;
+				const loop = Animated.loop(
 					Animated.stagger(
 						TYPING_DOTS_STAGGER_MS,
 						[bounce1, bounce2, bounce3].map((bounce) =>
@@ -287,14 +287,15 @@ export function TypingDots() {
 						),
 					),
 				);
+				loopRef.current = loop;
 				loop.start();
 			});
 		}
 
 		startAnimation();
 		return () => {
-			cancelled = true;
-			loop?.stop();
+			cancelled.value = true;
+			loopRef.current?.stop();
 			if (pendingTimeout) clearTimeout(pendingTimeout);
 		};
 	}, [bounce1, bounce2, bounce3]);
