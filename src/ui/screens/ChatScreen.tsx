@@ -35,6 +35,9 @@ const QUICK_PROMPTS = [
 	"What are three unconventional ways to boost creativity?",
 ];
 
+const AUTO_SCROLL_DELAY_MS = 40;
+const QUICK_PROMPT_DELAY_MS = 10;
+
 // =============================================================================
 // PROPS
 // =============================================================================
@@ -128,7 +131,7 @@ export function ChatScreen({
 	useEffect(() => {
 		const handle = setTimeout(() => {
 			messagesScrollRef.current?.scrollToEnd({ animated: false });
-		}, 40);
+		}, AUTO_SCROLL_DELAY_MS);
 		return () => clearTimeout(handle);
 	}, [isInstalling, messages]);
 
@@ -146,7 +149,7 @@ export function ChatScreen({
 			runSelectionHaptic();
 			onComposerChange(prompt);
 			// Small delay to let composer update before sending
-			setTimeout(() => void onSend(), 10);
+			setTimeout(() => void onSend(), QUICK_PROMPT_DELAY_MS);
 		},
 		[onSend, onComposerChange],
 	);

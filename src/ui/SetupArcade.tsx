@@ -154,7 +154,7 @@ function TicTacToeGame({ styles }: { styles: ReturnType<typeof buildStyles> }) {
 				return nextBoard;
 			});
 			setTurn("player");
-		}, 420);
+		}, BOT_MOVE_DELAY_MS);
 
 		return () => clearTimeout(handle);
 	}, [outcome, turn]);

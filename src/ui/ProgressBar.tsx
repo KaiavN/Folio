@@ -16,7 +16,7 @@ export function ProgressBar({ progress }: { progress: number }) {
 		}
 		animationRef.current = Animated.timing(animatedProgress, {
 			toValue: clampedProgress,
-			duration: 240,
+			duration: PROGRESS_BAR_ANIMATION_DURATION_MS,
 			easing: Easing.out(Easing.cubic),
 			useNativeDriver: false,
 		});
