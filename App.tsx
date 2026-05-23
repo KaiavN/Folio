@@ -1339,8 +1339,7 @@ export default function App() {
 				cancelSpeechRecognition();
 			}
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [speechState.status]);
 
 	const composerDisabled =
 		busyAction === "activating-model" ||
