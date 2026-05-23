@@ -18,6 +18,8 @@ import { messageStyles } from "./styles/chatBubbleStyles.ts";
 
 const COLORS = darkColors;
 
+const PARAGRAPH_SPLIT_REGEX = /\n{2,}/;
+
 const MESSAGE_ENTRANCE_DURATION_MS = 260;
 const TYPING_DOTS_STAGGER_MS = 180;
 const SPRING_STIFFNESS = 180;
@@ -164,17 +166,24 @@ export const AttachmentChip = memo(function AttachmentChip({
 	removable?: boolean;
 	onRemove?: (id: string) => void;
 }) {
+	const [imageError, setImageError] = useState(false);
+
 	return (
 		<View style={messageStyles.attachmentChip}>
 			{attachment.type === "audio" ? (
 				<View style={messageStyles.audioChipIcon}>
 					<Text style={messageStyles.audioChipIconText}>~</Text>
 				</View>
+			) : imageError ? (
+				<View style={messageStyles.attachmentChipThumbnail}>
+					<Text style={messageStyles.attachmentChipMeta}>Image unavailable</Text>
+				</View>
 			) : (
 				<Image
 					source={{ uri: attachment.localUri }}
 					style={messageStyles.attachmentChipThumbnail}
 					resizeMode={"cover"}
+					onError={() => setImageError(true)}
 				/>
 			)}
 			<View style={messageStyles.attachmentChipTextBlock}>
@@ -235,7 +244,7 @@ export const MessageText = memo(function MessageText({
 	isUser: boolean;
 }) {
 	const content = useMemo(() => {
-		const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim().length > 0);
+		const paragraphs = text.split(PARAGRAPH_SPLIT_REGEX).filter((p) => p.trim().length > 0);
 		return paragraphs.length ? paragraphs : [text];
 	}, [text]);
 
@@ -266,6 +275,7 @@ export function TypingDots() {
 	const bounce3 = useRef(new Animated.Value(0)).current;
 
 	useEffect(() => {
+		// bounce refs are stable for component lifetime, deps not needed
 		const cancelled = { value: false };
 		const loopRef = { current: null as Animated.CompositeAnimation | null };
 		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -305,7 +315,7 @@ export function TypingDots() {
 			loopRef.current?.stop();
 			if (pendingTimeout) clearTimeout(pendingTimeout);
 		};
-	}, [bounce1, bounce2, bounce3]);
+	}, []);
 
 	return (
 		<View style={messageStyles.typingDotsRow}>
