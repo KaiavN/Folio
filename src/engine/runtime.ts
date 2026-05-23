@@ -130,13 +130,27 @@ export async function bootstrapRuntime(): Promise<{
 	);
 	const availableBackends =
 		FolioExecuTorchEngineModule.getAvailableBackends().map(mapBackend);
-	const telemetry = mapTelemetry(
-		await withTimeout(
-			FolioExecuTorchEngineModule.getTelemetrySnapshotAsync(),
-			BOOTSTRAP_TIMEOUT_MS,
-			"Runtime bootstrap",
-		),
-	);
+
+	let telemetry: TelemetrySnapshot;
+	try {
+		telemetry = mapTelemetry(
+			await withTimeout(
+				FolioExecuTorchEngineModule.getTelemetrySnapshotAsync(),
+				BOOTSTRAP_TIMEOUT_MS,
+				"Runtime bootstrap",
+			),
+		);
+	} catch {
+		// Telemetry is best-effort — continue with null telemetry rather than
+		// failing the entire bootstrap, which would block all model interactions.
+		telemetry = {
+			ttftMs: null,
+			decodeTokensPerSecond: null,
+			peakMemoryMb: null,
+			queueDepth: null,
+			lastRoute: null,
+		};
+	}
 
 	return {
 		runtimeInfo,
@@ -777,7 +791,7 @@ function mapChatAttachment(
 		name: attachment.name,
 		localUri: attachment.localUri,
 		mimeType: attachment.mimeType,
-		source: attachment.source as "camera" | "file",
+		source: attachment.source === "file" ? "file" : "camera",
 		width: attachment.width,
 		height: attachment.height,
 	};

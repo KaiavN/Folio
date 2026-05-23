@@ -469,5 +469,5 @@ function formatGenerationMeta(
 	tokensGenerated: number,
 	telemetry: TelemetrySnapshot,
 ): string {
-	return `${tokensGenerated} tokens • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond.toFixed(1)} tok/s`;
+	return `${tokensGenerated} tokens • ${telemetry.ttftMs ?? "?"}ms first token • ${telemetry.decodeTokensPerSecond?.toFixed(1) ?? "?"} tok/s`;
 }

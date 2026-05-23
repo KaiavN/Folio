@@ -1043,6 +1043,7 @@ export default function App() {
 							"\n\n*Calculating...*",
 						meta: "Using calculator...",
 						streaming: false,
+						failed: false,
 					}),
 				);
 
@@ -1102,14 +1103,12 @@ export default function App() {
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									"",
 								)}`
 							: formatGenerationMeta(
 									generation.backendId,
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									"",
 								),
 					streaming: false,
 					failed: false,
@@ -1932,7 +1931,7 @@ function formatRuntimeMeta(
 	backendId: string,
 	telemetry: TelemetrySnapshot,
 ): string {
-	return `${backendId.toUpperCase()} • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond.toFixed(1)} tok/s`;
+	return `${backendId.toUpperCase()} • ${telemetry.ttftMs ?? "?"}ms first token • ${telemetry.decodeTokensPerSecond?.toFixed(1) ?? "?"} tok/s`;
 }
 
 function formatGenerationMeta(
@@ -1940,9 +1939,8 @@ function formatGenerationMeta(
 	turnIndex: number,
 	tokensGenerated: number,
 	telemetry: TelemetrySnapshot,
-	_artifactPath: string,
 ): string {
-	return `${tokensGenerated} tokens • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond.toFixed(1)} tok/s`;
+	return `${tokensGenerated} tokens • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond?.toFixed(1) ?? "?"} tok/s`;
 }
 
 function stripSpecialTokens(text: string): string {
