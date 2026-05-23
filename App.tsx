@@ -2,7 +2,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { StatusBar } from "expo-status-bar";
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Animated,
 	AppState,
@@ -13,6 +13,7 @@ import {
 	Modal,
 	Platform,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
 	useColorScheme,
@@ -53,6 +54,12 @@ import {
 	suspendAllSessions,
 } from "./src/engine/runtime.ts";
 import {
+	startSpeechRecognition,
+	stopSpeechRecognition,
+	cancelSpeechRecognition,
+} from "./src/engine/speech.ts";
+import type { SpeechRecognitionState } from "./src/engine/types.ts";
+import {
 	extractCalcToolCalls,
 	stripCalcTags,
 } from "./src/engine/tools/math.ts";
@@ -62,6 +69,7 @@ import type {
 	BackendAvailability,
 	ChatAttachment,
 	ChatGenerationChunk,
+	ChatMessage,
 	ModelArtifactDescriptor,
 	PreparedArtifact,
 	RoutingDecision,
@@ -70,15 +78,18 @@ import type {
 	SessionRuntimeOptions,
 	TelemetrySnapshot,
 } from "./src/engine/types.ts";
+import { appStyles } from "./src/ui/App.styles.ts";
+import { messageStyles } from "./src/ui/styles/chatBubbleStyles.ts";
 import {
 	runImpactHaptic,
 	runNotificationHaptic,
 	runSelectionHaptic,
 } from "./src/ui/haptics.ts";
+import { ErrorBoundary } from "./src/ui/ErrorBoundary.tsx";
 import { SetupArcade } from "./src/ui/SetupArcade.tsx";
-import { ColorsProvider, darkColors } from "./src/ui/colors.tsx";
+import { ColorsProvider, darkColors, elevation } from "./src/ui/colors.tsx";
 import { ModelPicker } from "./src/ui/ModelPicker.tsx";
-import { SetupProgressPanel } from "./src/ui/SetupProgressPanel.tsx";
+import SetupProgressPanel from "./src/ui/SetupProgressPanel.tsx";
 import { ModelSelectionCard } from "./src/ui/ModelSelectionCard.tsx";
 import { OnboardingHero } from "./src/ui/OnboardingHero.tsx";
 import { ChatScreen } from "./src/ui/screens/ChatScreen.tsx";
@@ -98,16 +109,6 @@ const QUICK_PROMPTS = [
 	"Help me draft a concise email to my team.",
 	"What are three unconventional ways to boost creativity?",
 ];
-
-type ChatMessage = {
-	id: string;
-	role: "assistant" | "user";
-	text: string;
-	attachments?: ChatAttachment[];
-	meta?: string;
-	streaming?: boolean;
-	failed?: boolean;
-};
 
 type OnboardingStage = "select-model" | "overview" | "waiting" | "chat";
 
@@ -161,6 +162,7 @@ export default function App() {
 		ArtifactPreparationProgress["phase"] | null
 	>(null);
 	const activeGenerationMessageIdRef = useRef<string | null>(null);
+	const generationIdRef = useRef<number>(0);
 	const [fallbackOffer, setFallbackOffer] = useState<{
 		preferredBackendName: string;
 		fallbackArtifact: BackendArtifactDescriptor;
@@ -173,17 +175,27 @@ export default function App() {
 	const isPrewarmingRef = useRef(false);
 	const prewarmAttemptRef = useRef(false);
 	const messagesRef = useRef<ChatMessage[]>(messages);
-	messagesRef.current = messages;
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
+	const [speechState, setSpeechState] = useState<SpeechRecognitionState>({
+		status: "idle",
+		partialTranscription: "",
+		error: null,
+	});
 
-	const liveSelectedArtifact =
-		catalogModels.find(
-			(artifact: ModelArtifactDescriptor) => artifact.id === selectedArtifactId,
-		) ??
-		MODEL_ARTIFACTS.find(
-			(artifact: ModelArtifactDescriptor) => artifact.id === FEATURED_MODEL_ID,
-		) ??
-		catalogModels[0] ??
-		MODEL_ARTIFACTS[0];
+	const liveSelectedArtifact = useMemo(
+		() =>
+			catalogModels.find(
+				(artifact: ModelArtifactDescriptor) => artifact.id === selectedArtifactId,
+			) ??
+			MODEL_ARTIFACTS.find(
+				(artifact: ModelArtifactDescriptor) => artifact.id === FEATURED_MODEL_ID,
+			) ??
+			catalogModels[0] ??
+			MODEL_ARTIFACTS[0],
+		[catalogModels, selectedArtifactId],
+	);
 	const selectedArtifact = hasStartedSetup
 		? (setupArtifact ?? liveSelectedArtifact)
 		: liveSelectedArtifact;
@@ -274,6 +286,7 @@ export default function App() {
 				setSetupArtifact(artifact);
 				setHasStartedSetup(true);
 				setOnboardingStage("chat");
+				didCheckArtifactRef.current = false;
 			} catch {
 				// silently fall back to onboarding
 			}
@@ -364,6 +377,7 @@ export default function App() {
 		selectedArtifactId,
 		forcedFallbackArtifact,
 		appStateKey,
+		availableBackends,
 	]);
 
 	useEffect(() => {
@@ -416,19 +430,21 @@ export default function App() {
 			// If the effect re-runs because sessionId changed, reset the attempt
 			// so the new session can be prewarmed.
 			prewarmAttemptRef.current = false;
+			isPrewarmingRef.current = false;
 		};
 	}, [session?.sessionId, session?.status, hasStartedSetup]);
 
 	useEffect(() => {
 		if (Platform.OS === "web") return;
 		if (!hasStartedSetup || !runtimeInfo) return;
-		if (catalogLoading && !catalogModels.length) return;
+		if (!catalogModels.length) return;
 		if (session?.status === "ready") return;
 		if (fallbackOffer) return;
 		if (busyAction === "activating-model") return;
 		if (didCheckArtifactRef.current) return;
 
-		didCheckArtifactRef.current = true;
+		console.log(`[artifact-check] running hasStartedSetup=${hasStartedSetup} runtimeInfo=${!!runtimeInfo} catalogModels=${catalogModels.length} session=${session?.status} fallbackOffer=${!!fallbackOffer} busyAction=${busyAction} routingDecision.selectedBackend=${routingDecision.selectedBackend} routingDecision.selectedArtifact=${!!routingDecision.selectedArtifact} availableBackends=${availableBackends.map(b => `${b.id}:${b.available}`).join(", ")}`);
+		console.log(`[artifact-check] previewDevice=${previewDevice.id} preferredBackends=${previewDevice.preferredBackends.join(", ")}`);
 
 		function resetToOnboarding() {
 			setHasStartedSetup(false);
@@ -457,7 +473,9 @@ export default function App() {
 				routingDecision.selectedArtifact,
 			);
 			const cached = manifest ? inspectPreparedArtifact(manifest) : null;
+			console.log(`[artifact-check] routing=selected backend=${routingDecision.selectedBackend} manifest=${manifest?.modelId}/${manifest?.backendId}/${manifest?.quantization} cached=${cached?.cacheState ?? "null"}`);
 			if (cached?.cacheState === "hit") {
+				didCheckArtifactRef.current = true;
 				return;
 			}
 			const candidates = getAvailableArtifactCandidates(
@@ -472,23 +490,29 @@ export default function App() {
 					selectedArtifact,
 					candidate,
 				);
+				const candidateCached = candidateManifest ? inspectPreparedArtifact(candidateManifest) : null;
+				console.log(`[artifact-check] fallback-candidate backend=${candidate.backend} quantization=${candidate.quantization} cached=${candidateCached?.cacheState ?? "null"}`);
 				if (
 					candidateManifest &&
-					inspectPreparedArtifact(candidateManifest)?.cacheState === "hit"
+					candidateCached?.cacheState === "hit"
 				) {
 					setFallbackOffer({
 						preferredBackendName: routingDecision.selectedArtifact.backend,
 						fallbackArtifact: candidate,
 					});
+					didCheckArtifactRef.current = true;
 					return;
 				}
 			}
 			if (hadPriorSetup || onboardingStage === "chat") {
 				resetToOnboarding();
 			}
+			didCheckArtifactRef.current = true;
 			return;
 		}
 
+		// routingDecision.selectedArtifact is null — don't set ref guard yet,
+		// as a future run with a resolved artifact needs to proceed
 		const candidates = getAvailableArtifactCandidates(
 			selectedArtifact,
 			previewDevice,
@@ -499,11 +523,14 @@ export default function App() {
 
 		for (const candidate of candidates) {
 			const manifest = buildArtifactManifest(selectedArtifact, candidate);
-			if (manifest && inspectPreparedArtifact(manifest)?.cacheState === "hit") {
+			const cached = manifest ? inspectPreparedArtifact(manifest) : null;
+			console.log(`[artifact-check] routing=null candidate backend=${candidate.backend} quantization=${candidate.quantization} cached=${cached?.cacheState ?? "null"}`);
+			if (manifest && cached?.cacheState === "hit") {
 				setFallbackOffer({
 					preferredBackendName: preferredBackend ?? candidate.backend,
 					fallbackArtifact: candidate,
 				});
+				didCheckArtifactRef.current = true;
 				return;
 			}
 		}
@@ -511,6 +538,9 @@ export default function App() {
 		if (hadPriorSetup || onboardingStage === "chat") {
 			resetToOnboarding();
 		}
+		// Only set guard when routing is still null after exhausting candidates
+		// — a future pass with resolved routing will proceed normally
+		didCheckArtifactRef.current = true;
 	}, [
 		hasStartedSetup,
 		runtimeInfo,
@@ -630,11 +660,16 @@ export default function App() {
 		let sessionIdToCancel: string | null = null;
 		let shouldCancelPendingSession = false;
 		let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+		let watchdogTimer2: ReturnType<typeof setTimeout> | null = null;
 
 		function clearWatchdog() {
 			if (watchdogTimer) {
 				clearTimeout(watchdogTimer);
 				watchdogTimer = null;
+			}
+			if (watchdogTimer2) {
+				clearTimeout(watchdogTimer2);
+				watchdogTimer2 = null;
 			}
 		}
 
@@ -648,7 +683,7 @@ export default function App() {
 						"Model setup is taking longer than expected. Still working...",
 					);
 					// Hard timeout at 5 minutes total
-					watchdogTimer = setTimeout(
+					watchdogTimer2 = setTimeout(
 						() => {
 							if (cancelled) return;
 							setErrorMessage(
@@ -689,7 +724,7 @@ export default function App() {
 				return;
 			}
 
-			if (catalogLoading && !catalogModels.length) {
+			if (!catalogModels.length) {
 				return;
 			}
 
@@ -770,7 +805,7 @@ export default function App() {
 					totalBytes: manifest.packageSizeBytes ?? null,
 				});
 				setMessages(
-					buildReadyMessages(
+					buildWelcomeMessages(
 						selectedArtifact,
 						selectedBackendId,
 						telemetrySnapshot,
@@ -924,6 +959,8 @@ export default function App() {
 		try {
 			setErrorMessage(null);
 			setBusyAction("drafting-reply");
+			const thisGenerationId = (generationIdRef.current ?? 0) + 1;
+			generationIdRef.current = thisGenerationId;
 			activeGenerationMessageIdRef.current = streamingMessageId;
 
 			// Build conversation history from prior messages (excluding current streaming one)
@@ -952,6 +989,9 @@ export default function App() {
 					attachments,
 					history,
 					onChunk: (chunk: ChatGenerationChunk) => {
+						if (generationIdRef.current !== thisGenerationId) {
+							return;
+						}
 						if (activeGenerationMessageIdRef.current !== streamingMessageId) {
 							return;
 						}
@@ -967,7 +1007,10 @@ export default function App() {
 					},
 				},
 			);
-			if (activeGenerationMessageIdRef.current !== streamingMessageId) {
+			if (
+				activeGenerationMessageIdRef.current !== streamingMessageId ||
+				generationIdRef.current !== thisGenerationId
+			) {
 				return;
 			}
 
@@ -1011,6 +1054,9 @@ export default function App() {
 						attachments: [],
 						history,
 						onChunk: (chunk: ChatGenerationChunk) => {
+							if (generationIdRef.current !== thisGenerationId) {
+								return;
+							}
 							if (activeGenerationMessageIdRef.current !== streamingMessageId) {
 								return;
 							}
@@ -1027,7 +1073,10 @@ export default function App() {
 				);
 			}
 
-			if (activeGenerationMessageIdRef.current !== streamingMessageId) {
+			if (
+				activeGenerationMessageIdRef.current !== streamingMessageId ||
+				generationIdRef.current !== thisGenerationId
+			) {
 				return;
 			}
 
@@ -1065,7 +1114,9 @@ export default function App() {
 				}),
 			);
 		} catch (error) {
-			if (activeGenerationMessageIdRef.current !== streamingMessageId) {
+			if (
+				activeGenerationMessageIdRef.current !== streamingMessageId
+			) {
 				return;
 			}
 			const nextError =
@@ -1134,7 +1185,7 @@ export default function App() {
 				lastRoute: session.backendId,
 			};
 			setMessages(
-				buildReadyMessages(
+				buildWelcomeMessages(
 					selectedArtifact,
 					session.backendId,
 					nextTelemetry,
@@ -1228,6 +1279,69 @@ export default function App() {
 		setComposerAttachments([mapCameraAttachment(result.assets[0])]);
 	}
 
+	async function handleStartRecording() {
+		if (busyAction) return;
+		runImpactHaptic("light");
+		setSpeechState({ status: "recognizing", partialTranscription: "", error: null });
+		try {
+			await startSpeechRecognition({
+				locale: "en-US",
+				onResult: (result) => {
+					setSpeechState((prev) => ({
+						...prev,
+						partialTranscription: result.transcription,
+						status: "recognizing",
+					}));
+				},
+				onError: (error) => {
+					setSpeechState((prev) => ({
+						...prev,
+						status: "error",
+						error,
+					}));
+				},
+			});
+		} catch {
+			setSpeechState({ status: "idle", partialTranscription: "", error: null });
+		}
+	}
+
+	async function handleStopRecording() {
+		setSpeechState((prev) => ({ ...prev, status: "processing" }));
+		const transcription = await stopSpeechRecognition();
+		setSpeechState({ status: "idle", partialTranscription: "", error: null });
+		if (transcription) {
+			setComposer((prev) => prev + transcription);
+		}
+	}
+
+	function handleCancelRecording() {
+		cancelSpeechRecognition();
+		setSpeechState({ status: "idle", partialTranscription: "", error: null });
+	}
+
+	// Auto-clear speech error after 4 seconds
+	useEffect(() => {
+		if (speechState.error) {
+			const timer = setTimeout(() => {
+				setSpeechState((prev) =>
+					prev.status === "error" ? { ...prev, status: "idle", error: null } : prev,
+				);
+			}, 4000);
+			return () => clearTimeout(timer);
+		}
+	}, [speechState.error]);
+
+	// Cleanup speech state if component unmounts while recording
+	useEffect(() => {
+		return () => {
+			if (speechState.status === "recognizing" || speechState.status === "processing") {
+				cancelSpeechRecognition();
+			}
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	const composerDisabled =
 		busyAction === "activating-model" ||
 		busyAction === "drafting-reply" ||
@@ -1242,12 +1356,19 @@ export default function App() {
 	const isIosSimulator =
 		runtimeInfo?.platform === "ios" &&
 		runtimeInfo.buildTarget === "ios-simulator";
-	const hasUserMessages = messages.some((message) => message.role === "user");
-	const hasStreamingAssistantText = messages.some(
-		(message) =>
-			message.role === "assistant" &&
-			message.streaming &&
-			message.text.trim().length > 0,
+	const hasUserMessages = useMemo(
+		() => messages.some((message) => message.role === "user"),
+		[messages],
+	);
+	const hasStreamingAssistantText = useMemo(
+		() =>
+			messages.some(
+				(message) =>
+					message.role === "assistant" &&
+					message.streaming &&
+					message.text.trim().length > 0,
+			),
+		[messages],
 	);
 	const installStageTitle = titleForInstallPhase(
 		installProgress.phase,
@@ -1297,15 +1418,14 @@ export default function App() {
 		],
 	};
 
-	function resolveArtifactDescriptor(
-		artifactId: string,
-	): ModelArtifactDescriptor | null {
-		return (
+	const resolveArtifactDescriptor = useCallback(
+		(artifactId: string): ModelArtifactDescriptor | null => (
 			catalogModels.find((artifact) => artifact.id === artifactId) ??
 			MODEL_ARTIFACTS.find((artifact) => artifact.id === artifactId) ??
 			null
-		);
-	}
+		),
+		[catalogModels],
+	);
 
 	function startFeaturedSetup() {
 		if (busyAction === "activating-model") {
@@ -1400,8 +1520,14 @@ export default function App() {
 						onSelect={startFeaturedSetup}
 					/>
 
+					{catalogLoading && !catalogErrorMessage ? (
+						<Text style={styles.inlineNote}>Loading available models...</Text>
+					) : null}
 					{catalogErrorMessage ? (
 						<Text style={styles.inlineNote}>{catalogErrorMessage}</Text>
+					) : null}
+					{!catalogLoading && !catalogModels.length && !catalogErrorMessage ? (
+						<Text style={styles.inlineNote}>No models available</Text>
 					) : null}
 				</View>
 			);
@@ -1545,6 +1671,7 @@ export default function App() {
 	}
 
 	return (
+		<ErrorBoundary>
 		<ColorsProvider>
 		<SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
 			<StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
@@ -1616,10 +1743,44 @@ export default function App() {
 							setIsModelPickerOpen(true);
 						}}
 						supportsVision={selectedArtifact.supportsVision}
+						speechState={speechState}
+						onStartRecording={handleStartRecording}
+						onStopRecording={handleStopRecording}
+						onCancelRecording={handleCancelRecording}
 					/>
 				)}
 			</KeyboardAvoidingView>
 
+			<ModelPicker
+				open={isModelPickerOpen}
+				models={catalogModels}
+				featuredArtifactId={featuredArtifact.id}
+				selectedArtifactId={selectedArtifact.id}
+				catalogErrorMessage={catalogErrorMessage}
+				onClose={() => setIsModelPickerOpen(false)}
+				onSelect={(artifactId) => {
+					if (busyAction === "activating-model") {
+						return;
+					}
+					setIsModelPickerOpen(false);
+					if (
+						artifactId === selectedArtifact.id &&
+						session?.status === "ready"
+					) {
+						return;
+					}
+					lastSetupErrorRef.current = null;
+					setForcedFallbackArtifact(null);
+					setFallbackOffer(null);
+					setSelectedArtifactId(artifactId);
+					setSetupArtifact(null);
+					setHasStartedSetup(true);
+					setOnboardingStage("overview");
+					setErrorMessage(null);
+					setSetupAttemptKey((current) => current + 1);
+					runImpactHaptic("light");
+				}}
+			/>
 			<FallbackPromptModal
 				visible={fallbackOffer !== null}
 				preferredBackendName={fallbackOffer?.preferredBackendName ?? ""}
@@ -1656,53 +1817,9 @@ export default function App() {
 					}
 				}}
 			/>
-			<ModelPicker
-				open={isModelPickerOpen}
-				models={catalogModels}
-				featuredArtifactId={featuredArtifact.id}
-				selectedArtifactId={selectedArtifact.id}
-				catalogErrorMessage={catalogErrorMessage}
-				onClose={() => setIsModelPickerOpen(false)}
-				onSelect={(artifactId) => {
-					if (busyAction === "activating-model") {
-						return;
-					}
-					setIsModelPickerOpen(false);
-					if (
-						artifactId === selectedArtifact.id &&
-						session?.status === "ready"
-					) {
-						return;
-					}
-					lastSetupErrorRef.current = null;
-					setForcedFallbackArtifact(null);
-					setFallbackOffer(null);
-					setSelectedArtifactId(artifactId);
-					setSetupArtifact(null);
-					setHasStartedSetup(true);
-					setOnboardingStage("overview");
-					setErrorMessage(null);
-					setSetupAttemptKey((current) => current + 1);
-					runImpactHaptic("light");
-				}}
-			/>
-			<FallbackPromptModal
-				visible={fallbackOffer !== null}
-				preferredBackendName={routingDecision.selectedArtifact.backend}
-				fallbackBackendName={fallbackOffer?.fallbackArtifact.backend ?? ""}
-				modelName={selectedModelLabel}
-				onAccept={() => {
-					if (!fallbackOffer) return;
-					setForcedFallbackArtifact(fallbackOffer.fallbackArtifact);
-					setFallbackOffer(null);
-					runImpactHaptic("light");
-				}}
-				onDecline={() => {
-					setFallbackOffer(null);
-				}}
-			/>
 		</SafeAreaView>
 		</ColorsProvider>
+		</ErrorBoundary>
 	);
 }
 
@@ -1725,11 +1842,14 @@ function FallbackPromptModal({
 	return (
 		<Modal transparent visible={visible} animationType="fade">
 			<View style={styles.modalBackdrop}>
-				<Pressable style={StyleSheet.absoluteFill} onPress={onDecline} />
 				<View
 					style={[
 						styles.modalSheet,
-						{ marginTop: insets.top + 20, maxWidth: 420 },
+						{
+							marginTop: insets.top + 20,
+							marginBottom: insets.bottom + 20,
+							maxWidth: 420,
+						},
 					]}
 				>
 					<View style={styles.modalHeader}>
