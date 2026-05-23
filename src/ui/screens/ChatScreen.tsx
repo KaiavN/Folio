@@ -7,9 +7,12 @@ import {
 	Text,
 	TextInput,
 	View,
+	useWindowDimensions,
+	ActivityIndicator,
 } from "react-native";
 
-import type { ChatAttachment } from "../../engine/types.ts";
+import type { ChatAttachment, ChatMessage, SpeechRecognitionState } from "../../engine/types.ts";
+import { MicButton } from "../MicButton.tsx";
 import { runSelectionHaptic } from "../haptics.ts";
 import {
 	borderRadius,
@@ -21,20 +24,6 @@ import {
 	ChatBubble,
 	TypingBubble,
 } from "../ChatComponents.tsx";
-
-// =============================================================================
-// TYPES
-// =============================================================================
-
-type ChatMessage = {
-	id: string;
-	role: "assistant" | "user";
-	text: string;
-	attachments?: ChatAttachment[];
-	meta?: string;
-	streaming?: boolean;
-	failed?: boolean;
-};
 
 // =============================================================================
 // CONSTANTS
@@ -64,8 +53,9 @@ export type ChatScreenProps = {
 	isInstalling: boolean;
 	hasUserMessages: boolean;
 	hasStreamingAssistantText: boolean;
-	userBubbleMaxWidth: number;
-	assistantBubbleMaxWidth: number;
+	// Optional responsive overrides - computed in parent for best UX
+	userBubbleMaxWidth?: number;
+	assistantBubbleMaxWidth?: number;
 	onComposerChange: (text: string) => void;
 	onSend: () => void;
 	onStopGeneration: () => void;
@@ -76,6 +66,10 @@ export type ChatScreenProps = {
 	onResetConversation: () => void;
 	onOpenModelPicker: () => void;
 	supportsVision: boolean;
+	speechState: SpeechRecognitionState;
+	onStartRecording: () => void;
+	onStopRecording: () => void;
+	onCancelRecording: () => void;
 };
 
 // =============================================================================
@@ -96,8 +90,8 @@ export function ChatScreen({
 	isInstalling,
 	hasUserMessages,
 	hasStreamingAssistantText,
-	userBubbleMaxWidth,
-	assistantBubbleMaxWidth,
+	userBubbleMaxWidth: userBubbleMaxWidthProp,
+	assistantBubbleMaxWidth: assistantBubbleMaxWidthProp,
 	onComposerChange,
 	onSend,
 	onStopGeneration,
@@ -108,7 +102,26 @@ export function ChatScreen({
 	onResetConversation,
 	onOpenModelPicker,
 	supportsVision,
+	speechState,
+	onStartRecording,
+	onStopRecording,
+	onCancelRecording,
 }: ChatScreenProps) {
+	const { width: screenWidth } = useWindowDimensions();
+	const isTablet = screenWidth >= 680;
+
+	// Use prop values if provided, otherwise compute responsively
+	const userBubbleMaxWidth =
+		userBubbleMaxWidthProp ??
+		(isTablet
+			? Math.min(420, screenWidth * 0.5)
+			: Math.min(300, screenWidth * 0.8));
+	const assistantBubbleMaxWidth =
+		assistantBubbleMaxWidthProp ??
+		(isTablet
+			? Math.min(560, screenWidth * 0.65)
+			: Math.min(320, screenWidth * 0.85));
+
 	const messagesScrollRef = useRef<ScrollView | null>(null);
 
 	// Auto-scroll when messages or busyAction changes
@@ -138,18 +151,25 @@ export function ChatScreen({
 		[onSend, onComposerChange],
 	);
 
-	
 	return (
 		<View style={styles.chatShell}>
 			{/* Top bar */}
 			<View style={styles.chatTopBar}>
-				<Text style={styles.chatTopBarTitle}>Folio</Text>
+				<Text
+					style={[
+						styles.chatTopBarTitle,
+						isTablet && tabletStyles.chatTopBarTitle,
+					]}
+				>
+					Folio
+				</Text>
 				<Pressable
 					onPress={onOpenModelPicker}
 					accessibilityRole="button"
 					accessibilityLabel="Choose model"
 					style={({ pressed }) => [
 						styles.chatModelButton,
+						isTablet && tabletStyles.chatModelButton,
 						pressed ? styles.buttonPressed : null,
 					]}
 				>
@@ -167,6 +187,7 @@ export function ChatScreen({
 					accessibilityLabel="Start a new chat"
 					style={({ pressed }) => [
 						styles.chatNewChatButton,
+						isTablet && tabletStyles.chatNewChatButton,
 						pressed ? styles.buttonPressed : null,
 					]}
 				>
@@ -212,7 +233,14 @@ export function ChatScreen({
 					{/* Starter prompts for new conversation */}
 					{!hasUserMessages ? (
 						<View style={styles.starterPanel}>
-							<Text style={styles.starterTitle}>Start here</Text>
+							<Text
+								style={[
+									styles.starterTitle,
+									isTablet && tabletStyles.starterTitle,
+								]}
+							>
+								Start here
+							</Text>
 							<Text style={styles.starterBody}>
 								Choose a starter or ask anything in your own words.
 							</Text>
@@ -224,10 +252,13 @@ export function ChatScreen({
 										disabled={composerDisabled}
 										style={({ pressed }) => [
 											styles.starterPromptButton,
+											isTablet && tabletStyles.starterPromptButton,
 											pressed ? styles.buttonPressed : null,
 										]}
 									>
-										<Text style={styles.starterPromptText}>{prompt}</Text>
+										<Text style={styles.starterPromptText}>
+											{prompt}
+										</Text>
 									</Pressable>
 								))}
 							</View>
@@ -245,7 +276,12 @@ export function ChatScreen({
 			</View>
 
 			{/* Composer */}
-			<View style={styles.composerCard}>
+			<View
+				style={[
+					styles.composerCard,
+					isTablet && tabletStyles.composerCard,
+				]}
+			>
 				{supportsVision ? (
 					<View style={styles.attachmentToolbar}>
 						<Pressable
@@ -255,6 +291,7 @@ export function ChatScreen({
 							accessibilityLabel="Add image from files"
 							style={({ pressed }) => [
 								styles.attachmentAction,
+								isTablet && tabletStyles.attachmentAction,
 								composerDisabled ? styles.buttonDisabled : null,
 								pressed ? styles.buttonPressed : null,
 							]}
@@ -268,6 +305,7 @@ export function ChatScreen({
 							accessibilityLabel="Open camera for image attachment"
 							style={({ pressed }) => [
 								styles.attachmentAction,
+								isTablet && tabletStyles.attachmentAction,
 								composerDisabled ? styles.buttonDisabled : null,
 								pressed ? styles.buttonPressed : null,
 							]}
@@ -290,7 +328,31 @@ export function ChatScreen({
 					</View>
 				) : null}
 
+				{speechState.partialTranscription ? (
+					<View style={styles.transcriptionPill}>
+						<Text style={styles.transcriptionPillText} numberOfLines={2}>
+							{speechState.partialTranscription}
+						</Text>
+						<Pressable onPress={onCancelRecording}>
+							<Text style={styles.transcriptionPillDismiss}>Dismiss</Text>
+						</Pressable>
+					</View>
+				) : null}
+
+				{speechState.error ? (
+					<View style={styles.speechErrorPill}>
+						<Text style={styles.speechErrorText}>{speechState.error}</Text>
+					</View>
+				) : null}
+
 				<View style={styles.composerInputRow}>
+					{!composerDisabled ? (
+						<MicButton
+							speechState={speechState}
+							onStartRecording={onStartRecording}
+							onStopRecording={onStopRecording}
+						/>
+					) : null}
 					<TextInput
 						value={composer}
 						onChangeText={onComposerChange}
@@ -301,7 +363,10 @@ export function ChatScreen({
 						}
 						placeholderTextColor="#7C8799"
 						accessibilityLabel="Message Folio"
-						style={styles.composerInput}
+						style={[
+							styles.composerInput,
+							composerDisabled && styles.composerInputDisabled,
+						]}
 						editable={!composerDisabled}
 						autoCapitalize="sentences"
 						autoCorrect
@@ -321,6 +386,7 @@ export function ChatScreen({
 						}
 						style={({ pressed }) => [
 							styles.sendButton,
+							isTablet && tabletStyles.sendButton,
 							!(canStopGeneration || canSend) && styles.buttonDisabled,
 							canStopGeneration ? styles.stopButton : null,
 							pressed ? styles.buttonPressed : null,
@@ -459,6 +525,38 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		fontWeight: "700",
 	},
+	transcriptionPill: {
+		backgroundColor: "rgba(214, 255, 95, 0.08)",
+		borderRadius: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+	},
+	transcriptionPillText: {
+		flex: 1,
+		color: "#F6F1E8",
+		fontSize: 13,
+		fontWeight: "500",
+		lineHeight: 18,
+	},
+	transcriptionPillDismiss: {
+		color: "#9F9586",
+		fontSize: 12,
+		fontWeight: "700",
+	},
+	speechErrorPill: {
+		backgroundColor: "rgba(241, 157, 139, 0.12)",
+		borderRadius: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+	},
+	speechErrorText: {
+		color: "#F1B7A9",
+		fontSize: 13,
+		fontWeight: "500",
+	},
 	composerAttachmentRow: {
 		flexDirection: "row",
 		flexWrap: "wrap",
@@ -467,7 +565,7 @@ const styles = StyleSheet.create({
 	composerInputRow: {
 		flexDirection: "row",
 		alignItems: "flex-end",
-		gap: spacing.sm,
+		gap: spacing.xs,
 	},
 	composerInput: {
 		flex: 1,
@@ -477,6 +575,9 @@ const styles = StyleSheet.create({
 		minHeight: 40,
 		paddingHorizontal: 6,
 		paddingVertical: 10,
+	},
+	composerInputDisabled: {
+		opacity: 0.5,
 	},
 	sendButton: {
 		backgroundColor: "#E7D7C0",
@@ -507,3 +608,35 @@ const styles = StyleSheet.create({
 		lineHeight: 19,
 	},
 });
+
+const tabletStyles = {
+	chatTopBarTitle: {
+		fontSize: 26,
+	},
+	chatModelButton: {
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	chatNewChatButton: {
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	starterTitle: {
+		fontSize: 20,
+	},
+	starterPromptButton: {
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	composerCard: {
+		padding: 16,
+	},
+	attachmentAction: {
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+	},
+	sendButton: {
+		paddingHorizontal: 20,
+		paddingVertical: 14,
+	},
+};

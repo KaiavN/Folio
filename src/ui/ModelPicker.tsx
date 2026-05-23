@@ -100,6 +100,13 @@ export function ModelPicker({
 						{catalogErrorMessage ? (
 							<Text style={styles.modalErrorText}>{catalogErrorMessage}</Text>
 						) : null}
+						{sortedModels.length === 0 && !catalogErrorMessage ? (
+							<View style={styles.emptyState}>
+								<Text style={styles.emptyStateText}>
+									No models available
+								</Text>
+							</View>
+						) : null}
 						{sortedModels.map((model) => {
 							const available = isModelAvailable(model);
 							const selected = isSelected(model);
@@ -285,6 +292,15 @@ const styles = StyleSheet.create({
 		color: "#FCA5A5",
 		fontSize: 13,
 		lineHeight: 18,
+	},
+	emptyState: {
+		padding: 20,
+		alignItems: "center",
+	},
+	emptyStateText: {
+		color: "#9F9586",
+		fontSize: 14,
+		textAlign: "center",
 	},
 	modelOption: {
 		flexDirection: "row",

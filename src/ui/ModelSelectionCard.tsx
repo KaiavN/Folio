@@ -1,7 +1,7 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
-import { StatusPill } from "./SetupArcade.tsx";
+import { StatusPill } from "./ChatComponents.tsx";
 
 interface ModelSelectionCardProps {
 	modelName: string;
@@ -20,6 +20,9 @@ export function ModelSelectionCard({
 	footerMeta,
 	onSelect,
 }: ModelSelectionCardProps) {
+	const { width: screenWidth } = useWindowDimensions();
+	const isTablet = screenWidth >= 680;
+
 	return (
 		<Pressable
 			onPress={onSelect}
@@ -30,12 +33,16 @@ export function ModelSelectionCard({
 			style={({ pressed }) => [
 				styles.selectionCard,
 				styles.selectionCardPrimary,
+				isTablet && styles.tabletCard,
 				pressed ? styles.buttonPressed : null,
 			]}
 		>
 			<View style={styles.selectionCardHeader}>
 				<Text
-					style={styles.selectionCardTitle}
+					style={[
+						styles.selectionCardTitle,
+						isTablet && styles.tabletTitle,
+					]}
 					numberOfLines={1}
 					ellipsizeMode="tail"
 				>
@@ -61,7 +68,7 @@ export function ModelSelectionCard({
 	);
 }
 
-const styles = {
+const styles = StyleSheet.create({
 	selectionCard: {
 		gap: 12,
 		borderRadius: 22,
@@ -72,8 +79,8 @@ const styles = {
 	},
 	selectionCardHeader: {
 		flexDirection: "row",
-		alignItems: "flex-start",
-		justifyContent: "space-between",
+		alignItems: "flex-start" as const,
+		justifyContent: "space-between" as const,
 		gap: 10,
 	},
 	selectionCardTitle: {
@@ -81,7 +88,7 @@ const styles = {
 		minWidth: 0,
 		color: "#F6F1E8",
 		fontSize: 22,
-		fontWeight: "800",
+		fontWeight: "800" as const,
 		lineHeight: 27,
 	},
 	selectionCardMeta: {
@@ -90,8 +97,8 @@ const styles = {
 	},
 	selectionCardFooter: {
 		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
+		alignItems: "center" as const,
+		justifyContent: "space-between" as const,
 		gap: 10,
 		paddingTop: 8,
 	},
@@ -100,15 +107,23 @@ const styles = {
 		minWidth: 0,
 		color: "#B3A793",
 		fontSize: 12,
-		fontWeight: "700",
+		fontWeight: "700" as const,
 	},
 	selectionFooterAction: {
 		flexShrink: 0,
 		color: "#F6F1E8",
 		fontSize: 14,
-		fontWeight: "800",
+		fontWeight: "800" as const,
 	},
 	buttonPressed: {
 		opacity: 0.7,
 	},
-};
+	tabletCard: {
+		padding: 20,
+		borderRadius: 26,
+	},
+	tabletTitle: {
+		fontSize: 26,
+		lineHeight: 32,
+	},
+});

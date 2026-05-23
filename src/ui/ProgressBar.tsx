@@ -6,15 +6,25 @@ export function ProgressBar({ progress }: { progress: number }) {
 	const COLORS = useColors();
 	const clampedProgress = Math.min(Math.max(progress, 0), 1);
 	const animatedProgress = useRef(new Animated.Value(clampedProgress)).current;
+	const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
 	useEffect(() => {
-		Animated.timing(animatedProgress, {
+		if (animationRef.current) {
+			animationRef.current.stop();
+		}
+		animationRef.current = Animated.timing(animatedProgress, {
 			toValue: clampedProgress,
 			duration: 240,
 			easing: Easing.out(Easing.cubic),
 			useNativeDriver: false,
-		}).start();
-	}, [animatedProgress, clampedProgress]);
+		});
+		animationRef.current.start();
+		return () => {
+			if (animationRef.current) {
+				animationRef.current.stop();
+			}
+		};
+	}, [clampedProgress, animatedProgress]);
 
 	const width = animatedProgress.interpolate({
 		inputRange: [0, 1],

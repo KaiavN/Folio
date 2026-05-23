@@ -19,7 +19,7 @@ import {
 	runNotificationHaptic,
 	runSelectionHaptic,
 } from "./haptics.ts";
-import { useColors } from "./colors.tsx";
+import { darkColors, useColors } from "./colors.tsx";
 
 type ArcadeGame = "tic-tac-toe" | "pong";
 type Mark = "X" | "O" | null;
@@ -65,6 +65,7 @@ type PongState = {
 
 export function SetupArcade() {
 	const COLORS = useColors();
+	const styles = buildStyles(COLORS);
 	const [activeGame, setActiveGame] = useState<ArcadeGame>("tic-tac-toe");
 	const activeGameCopy =
 		activeGame === "tic-tac-toe"
@@ -119,12 +120,12 @@ export function SetupArcade() {
 				<Text style={styles.helperBody}>{activeGameCopy.body}</Text>
 			</View>
 
-			{activeGame === "tic-tac-toe" ? <TicTacToeGame /> : <PongGame />}
+			{activeGame === "tic-tac-toe" ? <TicTacToeGame styles={styles} /> : <PongGame styles={styles} />}
 		</View>
 	);
 }
 
-function TicTacToeGame() {
+function TicTacToeGame({ styles }: { styles: ReturnType<typeof buildStyles> }) {
 	const [board, setBoard] = useState<Mark[]>(Array(9).fill(null));
 	const [playerWins, setPlayerWins] = useState(0);
 	const [botWins, setBotWins] = useState(0);
@@ -236,9 +237,9 @@ function TicTacToeGame() {
 			</View>
 
 			<View style={styles.scoreRow}>
-				<ScoreChip label="You" value={playerWins} />
-				<ScoreChip label="Bot" value={botWins} />
-				<ScoreChip label="Draws" value={draws} />
+				<ScoreChip label="You" value={playerWins} styles={styles} />
+				<ScoreChip label="Bot" value={botWins} styles={styles} />
+				<ScoreChip label="Draws" value={draws} styles={styles} />
 			</View>
 
 			<View style={styles.ticTacToeBoard}>
@@ -293,7 +294,7 @@ function TicTacToeGame() {
 	);
 }
 
-function PongGame() {
+function PongGame({ styles }: { styles: ReturnType<typeof buildStyles> }) {
 	const [isRunning, setIsRunning] = useState(false);
 	const [scores, setScores] = useState({
 		playerScore: 0,
@@ -477,9 +478,9 @@ function PongGame() {
 			</View>
 
 			<View style={styles.scoreRow}>
-				<ScoreChip label="You" value={scores.playerScore} />
-				<ScoreChip label="Bot" value={scores.botScore} />
-				<ScoreChip label="Rally" value={scores.rallyCount} />
+				<ScoreChip label="You" value={scores.playerScore} styles={styles} />
+				<ScoreChip label="Bot" value={scores.botScore} styles={styles} />
+				<ScoreChip label="Rally" value={scores.rallyCount} styles={styles} />
 			</View>
 
 			<View
@@ -565,7 +566,7 @@ function PongGame() {
 	);
 }
 
-function ScoreChip({ label, value }: { label: string; value: number }) {
+function ScoreChip({ label, value, styles }: { label: string; value: number; styles: ReturnType<typeof buildStyles> }) {
 	return (
 		<View style={styles.scoreChip}>
 			<Text style={styles.scoreChipLabel}>{label}</Text>
@@ -757,26 +758,27 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }
 
-const styles = StyleSheet.create({
-	shell: {
-		gap: 14,
-	},
-	switcher: {
-		flexDirection: "row",
-		gap: 8,
-		padding: 4,
-		backgroundColor: COLORS.bgSubtle,
-		borderRadius: 18,
-		borderWidth: 1,
-		borderColor: COLORS.border,
-	},
-	helperCard: {
-		gap: 4,
-		paddingHorizontal: 14,
-		paddingVertical: 12,
-		borderRadius: 18,
-		backgroundColor: COLORS.bgSubtle,
-		borderWidth: 1,
+function buildStyles(COLORS: typeof darkColors) {
+	return StyleSheet.create({
+		shell: {
+			gap: 14,
+		},
+		switcher: {
+			flexDirection: "row",
+			gap: 8,
+			padding: 4,
+			backgroundColor: COLORS.bgSubtle,
+			borderRadius: 18,
+			borderWidth: 1,
+			borderColor: COLORS.border,
+		},
+		helperCard: {
+			gap: 4,
+			paddingHorizontal: 14,
+			paddingVertical: 12,
+			borderRadius: 18,
+			backgroundColor: COLORS.bgSubtle,
+			borderWidth: 1,
 		borderColor: COLORS.border,
 	},
 	helperTitle: {
@@ -1010,3 +1012,4 @@ const styles = StyleSheet.create({
 		opacity: 0.85,
 	},
 });
+}

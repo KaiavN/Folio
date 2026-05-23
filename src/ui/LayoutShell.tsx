@@ -5,6 +5,7 @@ import {
 	StyleSheet,
 	View,
 	type ViewStyle,
+	useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,13 +16,24 @@ interface LayoutShellProps {
 	style?: ViewStyle;
 }
 
-const HORIZONTAL_PADDING = spacing.xl; // 24px
+const HORIZONTAL_PADDING_BASE = spacing.xl; // 24px
 
 export function LayoutShell({ children, style }: LayoutShellProps) {
 	const insets = useSafeAreaInsets();
+	const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+	const isTablet = screenWidth >= 680;
+	const isLandscape = screenWidth > screenHeight;
+
+	// Adaptive sizing
+	const horizontalPadding = isTablet ? spacing.xxl : HORIZONTAL_PADDING_BASE;
 	const topBuffer = Platform.OS === "ios" ? 14 : 10;
 	const topInsetPadding = insets.top + topBuffer;
 	const bottomInsetPadding = Math.max(14, insets.bottom + 10);
+
+	// Responsive glow sizes
+	const glowScale = isTablet ? 1.4 : 1;
+	const glowTopSize = 220 * glowScale;
+	const glowBottomSize = 200 * glowScale;
 
 	return (
 		<SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
@@ -31,13 +43,30 @@ export function LayoutShell({ children, style }: LayoutShellProps) {
 					{
 						paddingTop: topInsetPadding,
 						paddingBottom: bottomInsetPadding,
-						paddingHorizontal: HORIZONTAL_PADDING,
+						paddingHorizontal: horizontalPadding,
 					},
 				]}
-				behavior={Platform.OS === "ios" ? "padding" : undefined}
+				behavior={Platform.OS === "ios" ? "padding" : "padding"}
 			>
-				<View style={styles.backgroundGlowTop} />
-				<View style={styles.backgroundGlowBottom} />
+				<View
+					style={[
+						styles.backgroundGlowTop,
+						{
+							width: glowTopSize,
+							height: glowTopSize,
+						},
+					]}
+				/>
+				<View
+					style={[
+						styles.backgroundGlowBottom,
+						{
+							width: glowBottomSize,
+							height: glowBottomSize,
+							bottom: isLandscape ? 40 : 60,
+						},
+					]}
+				/>
 				<View style={[styles.content, style]}>{children}</View>
 			</KeyboardAvoidingView>
 		</SafeAreaView>
@@ -55,17 +84,12 @@ const styles = StyleSheet.create({
 		position: "absolute",
 		top: -80,
 		right: -40,
-		width: 220,
-		height: 220,
 		borderRadius: 999,
 		backgroundColor: "rgba(212, 181, 137, 0.12)",
 	},
 	backgroundGlowBottom: {
 		position: "absolute",
-		bottom: 60,
 		left: -60,
-		width: 200,
-		height: 200,
 		borderRadius: 999,
 		backgroundColor: "rgba(143, 158, 114, 0.12)",
 	},

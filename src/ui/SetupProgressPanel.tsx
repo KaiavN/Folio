@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, View } from "react-native";
 import { ArtifactPreparationProgress, ModelArtifactDescriptor, PreparedArtifact, SessionHandle } from "../../src/engine/types.ts";
-import ProgressBar from "./ProgressBar.tsx";
+import { ProgressBar } from "./ProgressBar.tsx";
 import { useColors } from "./colors.tsx";
 
 interface SetupProgressPanelProps {
@@ -115,12 +115,11 @@ export default function SetupProgressPanel({
 }: SetupProgressPanelProps) {
 	const COLORS = useColors();
 
-	const usedLocalCache = installedArtifact?.cacheState === "checkpoint";
+	const usedLocalCache = installedArtifact?.cacheState === "hit";
+	const totalBytes = installProgress.totalBytes ?? 0;
 	const downloadRatio =
-		installProgress.transferredBytes !== undefined && installProgress.totalBytes !== undefined
-			? installProgress.totalBytes > 0
-				? installProgress.transferredBytes / installProgress.totalBytes
-				: 0
+		installProgress.transferredBytes !== undefined && totalBytes > 0
+			? installProgress.transferredBytes / totalBytes
 			: 0;
 
 	const transferBarProgress =
@@ -150,14 +149,15 @@ export default function SetupProgressPanel({
 						? 3
 						: 4;
 
+	const manifestPackageSize = manifest?.artifacts?.[0]?.packageSizeBytes;
 	const installStageTitle = titleForInstallPhase(
 		installProgress.phase,
-		manifest?.packageSizeBytes,
+		manifestPackageSize,
 	);
 	const installStageDetail = detailForInstallPhase(
 		installProgress.phase,
 		installProgress.transferredBytes,
-		installProgress.totalBytes ?? manifest?.packageSizeBytes ?? null,
+		installProgress.totalBytes ?? manifestPackageSize ?? null,
 	);
 
 	const progressEyebrow =
@@ -355,7 +355,7 @@ export default function SetupProgressPanel({
 								? `${formatTransferProgress(
 										installProgress.transferredBytes,
 										installProgress.totalBytes ??
-											manifest?.packageSizeBytes ??
+											manifestPackageSize ??
 											null,
 									)} downloaded`
 								: installStageDetail}

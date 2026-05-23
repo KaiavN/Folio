@@ -13,7 +13,8 @@ import {
 
 import type { ChatAttachment, ChatMessage } from "../engine/types.ts";
 import { runImpactHaptic, runSelectionHaptic } from "./haptics.ts";
-import { darkColors, elevation } from "./colors.tsx";
+import { darkColors } from "./colors.tsx";
+import { messageStyles } from "./styles/chatBubbleStyles.ts";
 
 const COLORS = darkColors;
 
@@ -48,10 +49,22 @@ export const ChatBubble = memo(function ChatBubble({
 		}).start();
 	}, [entrance]);
 
+	const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => {
 		if (!copied) return;
-		const t = setTimeout(() => setCopied(false), 1500);
-		return () => clearTimeout(t);
+		if (copiedTimeoutRef.current) {
+			clearTimeout(copiedTimeoutRef.current);
+		}
+		copiedTimeoutRef.current = setTimeout(() => {
+			setCopied(false);
+			copiedTimeoutRef.current = null;
+		}, 1500);
+		return () => {
+			if (copiedTimeoutRef.current) {
+				clearTimeout(copiedTimeoutRef.current);
+				copiedTimeoutRef.current = null;
+			}
+		};
 	}, [copied]);
 
 	const animatedStyle = {
@@ -82,8 +95,8 @@ export const ChatBubble = memo(function ChatBubble({
 	return (
 		<Animated.View
 			style={[
-				stylesBubble.messageRow,
-				isUser ? stylesBubble.messageRowUser : stylesBubble.messageRowAssistant,
+				messageStyles.messageRow,
+				isUser ? messageStyles.messageRowUser : messageStyles.messageRowAssistant,
 				{ maxWidth: isUser ? userMaxWidth : assistantMaxWidth },
 				animatedStyle,
 			]}
@@ -98,12 +111,12 @@ export const ChatBubble = memo(function ChatBubble({
 			>
 				<View
 					style={[
-						stylesBubble.messageBubble,
-						isUser ? stylesBubble.userBubble : stylesBubble.assistantBubble,
+						messageStyles.messageBubble,
+						isUser ? messageStyles.userBubble : messageStyles.assistantBubble,
 					]}
 				>
 					{message.attachments?.length ? (
-						<View style={stylesBubble.messageAttachmentRow}>
+						<View style={messageStyles.messageAttachmentRow}>
 							{message.attachments.map((attachment) => (
 								<AttachmentChip key={attachment.id} attachment={attachment} />
 							))}
@@ -111,7 +124,7 @@ export const ChatBubble = memo(function ChatBubble({
 					) : null}
 					<MessageText text={message.text} isUser={isUser} />
 					{message.meta ? (
-						<Text style={stylesBubble.messageMeta}>{message.meta}</Text>
+						<Text style={messageStyles.messageMeta}>{message.meta}</Text>
 					) : null}
 					{!isUser && message.failed && onRetry ? (
 						<Pressable
@@ -119,15 +132,15 @@ export const ChatBubble = memo(function ChatBubble({
 							accessibilityRole="button"
 							accessibilityLabel="Retry generating this reply"
 							style={({ pressed }) => [
-								stylesBubble.retryButton,
+								messageStyles.retryButton,
 								pressed ? buttonPressed : null,
 							]}
 						>
-							<Text style={stylesBubble.retryButtonText}>Retry</Text>
+							<Text style={messageStyles.retryButtonText}>Retry</Text>
 						</Pressable>
 					) : null}
 					{!isUser && copied ? (
-						<Text style={stylesBubble.copyToast}>Copied</Text>
+						<Text style={messageStyles.copyToast}>Copied</Text>
 					) : null}
 				</View>
 			</Pressable>
@@ -144,18 +157,28 @@ export function AttachmentChip({
 }: {
 	attachment: ChatAttachment;
 	removable?: boolean;
-	onRemove?: () => void;
+	onRemove?: (id: string) => void;
 }) {
 	return (
-		<View style={stylesBubble.attachmentChip}>
-			<Image
-				source={{ uri: attachment.localUri }}
-				style={stylesBubble.attachmentChipThumbnail}
-			/>
-			<View style={stylesBubble.attachmentChipTextBlock}>
-				<Text style={stylesBubble.attachmentChipTitle}>{attachment.name}</Text>
-				<Text style={stylesBubble.attachmentChipMeta}>
-					{attachment.source === "camera" ? "Camera capture" : "Uploaded file"}
+		<View style={messageStyles.attachmentChip}>
+			{attachment.type === "audio" ? (
+				<View style={messageStyles.audioChipIcon}>
+					<Text style={messageStyles.audioChipIconText}>~</Text>
+				</View>
+			) : (
+				<Image
+					source={{ uri: attachment.localUri }}
+					style={messageStyles.attachmentChipThumbnail}
+				/>
+			)}
+			<View style={messageStyles.attachmentChipTextBlock}>
+				<Text style={messageStyles.attachmentChipTitle}>{attachment.name}</Text>
+				<Text style={messageStyles.attachmentChipMeta}>
+					{attachment.source === "camera"
+						? "Camera capture"
+						: attachment.source === "voice"
+							? "Voice recording"
+							: "Uploaded file"}
 					{attachment.width && attachment.height
 						? ` • ${attachment.width}x${attachment.height}`
 						: ""}
@@ -165,13 +188,13 @@ export function AttachmentChip({
 				<Pressable
 					onPress={() => {
 						runSelectionHaptic();
-						onRemove?.();
+						onRemove?.(attachment.id);
 					}}
 					accessibilityRole="button"
 					accessibilityLabel={`Remove ${attachment.name}`}
 					style={({ pressed }) => [pressed ? buttonPressed : null]}
 				>
-					<Text style={stylesBubble.attachmentChipRemove}>Remove</Text>
+					<Text style={messageStyles.attachmentChipRemove}>Remove</Text>
 				</Pressable>
 			) : null}
 		</View>
@@ -183,14 +206,14 @@ export function AttachmentChip({
 export function TypingBubble({ label }: { label: string }) {
 	return (
 		<View
-			style={stylesBubble.typingBubbleContainer}
+			style={messageStyles.typingBubbleContainer}
 			accessibilityRole="text"
 			accessibilityLiveRegion="polite"
 			accessibilityLabel={label}
 		>
-			<View style={stylesBubble.typingRow}>
+			<View style={messageStyles.typingRow}>
 				<TypingDots />
-				<Text style={stylesBubble.typingText}>{label}</Text>
+				<Text style={messageStyles.typingText}>{label}</Text>
 			</View>
 		</View>
 	);
@@ -205,15 +228,15 @@ export function MessageText({ text, isUser }: { text: string; isUser: boolean })
 	const content = paragraphs.length ? paragraphs : [text];
 
 	return (
-		<View style={stylesBubble.messageParagraphGroup}>
+		<View style={messageStyles.messageParagraphGroup}>
 			{content.map((paragraph, index) => (
 				<Text
 					key={index}
 					selectable={false}
 					style={[
-						stylesBubble.messageText,
-						isUser ? stylesBubble.userMessageText : stylesBubble.assistantMessageText,
-						index < content.length - 1 ? stylesBubble.messageParagraph : null,
+						messageStyles.messageText,
+						isUser ? messageStyles.userMessageText : messageStyles.assistantMessageText,
+						index < content.length - 1 ? messageStyles.messageParagraph : null,
 					]}
 				>
 					{paragraph}
@@ -233,51 +256,51 @@ export function TypingDots() {
 	useEffect(() => {
 		let cancelled = false;
 		let loop: Animated.CompositeAnimation | null = null;
+		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-		async function startAnimation() {
-			const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-			if (cancelled) return;
-
-			if (isReduceMotionEnabled) return;
-
-			loop = Animated.loop(
-				Animated.stagger(
-					180,
-					[bounce1, bounce2, bounce3].map((bounce) =>
-						Animated.sequence([
-							Animated.spring(bounce, {
-								toValue: 1,
-								damping: 12,
-								stiffness: 180,
-								useNativeDriver: true,
-							}),
-							Animated.spring(bounce, {
-								toValue: 0,
-								damping: 12,
-								stiffness: 180,
-								useNativeDriver: true,
-							}),
-						]),
+		function startAnimation() {
+			AccessibilityInfo.isReduceMotionEnabled().then((isReduceMotionEnabled) => {
+				if (cancelled || isReduceMotionEnabled) return;
+				loop = Animated.loop(
+					Animated.stagger(
+						180,
+						[bounce1, bounce2, bounce3].map((bounce) =>
+							Animated.sequence([
+								Animated.spring(bounce, {
+									toValue: 1,
+									damping: 12,
+									stiffness: 180,
+									useNativeDriver: true,
+								}),
+								Animated.spring(bounce, {
+									toValue: 0,
+									damping: 12,
+									stiffness: 180,
+									useNativeDriver: true,
+								}),
+							]),
+						),
 					),
-				),
-			);
-			loop.start();
+				);
+				loop.start();
+			});
 		}
 
 		startAnimation();
 		return () => {
 			cancelled = true;
 			loop?.stop();
+			if (pendingTimeout) clearTimeout(pendingTimeout);
 		};
 	}, [bounce1, bounce2, bounce3]);
 
 	return (
-		<View style={stylesBubble.typingDotsRow}>
+		<View style={messageStyles.typingDotsRow}>
 			{[bounce1, bounce2, bounce3].map((bounce, index) => (
 				<Animated.View
 					key={index}
 					style={[
-						stylesBubble.typingDot,
+						messageStyles.typingDot,
 						{
 							transform: [
 								{
@@ -307,18 +330,18 @@ export function StatusPill({
 	return (
 		<View
 			style={[
-				stylesBubble.statusPill,
-				tone === "success" ? stylesBubble.statusPillSuccess : null,
-				tone === "muted" ? stylesBubble.statusPillMuted : null,
+				messageStyles.statusPill,
+				tone === "success" ? messageStyles.statusPillSuccess : null,
+				tone === "muted" ? messageStyles.statusPillMuted : null,
 			]}
 			accessibilityRole="text"
 			accessibilityLabel={`Status: ${label}`}
 		>
 			<Text
 				style={[
-					stylesBubble.statusPillText,
-					tone === "success" ? stylesBubble.statusPillTextSuccess : null,
-					tone === "muted" ? stylesBubble.statusPillTextMuted : null,
+					messageStyles.statusPillText,
+					tone === "success" ? messageStyles.statusPillTextSuccess : null,
+					tone === "muted" ? messageStyles.statusPillTextMuted : null,
 				]}
 			>
 				{label}
@@ -329,156 +352,5 @@ export function StatusPill({
 
 // --- Styles ---
 
-const stylesBubble = StyleSheet.create({
-	messageRow: {
-		flexDirection: "row",
-	},
-	messageRowAssistant: {
-		alignSelf: "flex-start",
-		maxWidth: "96%",
-	},
-	messageRowUser: {
-		alignSelf: "flex-end",
-		maxWidth: "84%",
-	},
-	messageBubble: {
-		borderRadius: 22,
-		paddingHorizontal: 16,
-		paddingVertical: 13,
-		gap: 6,
-	},
-	assistantBubble: {
-		backgroundColor: COLORS.bgCard,
-	},
-	userBubble: {
-		backgroundColor: COLORS.accentPrimary,
-	},
-	messageText: {
-		fontSize: 15,
-		lineHeight: 21,
-	},
-	messageParagraphGroup: {
-		gap: 8,
-	},
-	messageParagraph: {
-		marginBottom: 0,
-	},
-	messageAttachmentRow: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		gap: 8,
-	},
-	assistantMessageText: {
-		color: "#F0E8DC",
-	},
-	userMessageText: {
-		color: COLORS.accentOnDark,
-	},
-	messageMeta: {
-		color: "#9F9586",
-		fontSize: 11,
-		lineHeight: 15,
-	},
-	copyToast: {
-		color: COLORS.accentMid,
-		fontSize: 11,
-		fontWeight: "700",
-		marginTop: 2,
-	},
-	retryButton: {
-		alignSelf: "flex-start",
-		backgroundColor: "rgba(241, 157, 139, 0.15)",
-		borderRadius: 999,
-		paddingHorizontal: 12,
-		paddingVertical: 7,
-		marginTop: 4,
-	},
-	retryButtonText: {
-		color: COLORS.errorText,
-		fontSize: 13,
-		fontWeight: "800",
-	},
-	typingRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-	},
-	typingDotsRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 6,
-	},
-	typingDot: {
-		width: 8,
-		height: 8,
-		borderRadius: 999,
-		backgroundColor: COLORS.textTertiary,
-	},
-	typingBubbleContainer: {
-		backgroundColor: COLORS.bgCard,
-		borderRadius: 24,
-		padding: 16,
-		...elevation.medium,
-	},
-	typingText: {
-		color: COLORS.textTertiary,
-		fontSize: 13,
-		lineHeight: 18,
-	},
-	attachmentChip: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		backgroundColor: "rgba(231, 215, 192, 0.08)",
-		borderRadius: 14,
-		paddingHorizontal: 10,
-		paddingVertical: 8,
-	},
-	attachmentChipThumbnail: {
-		width: 38,
-		height: 38,
-		borderRadius: 10,
-		backgroundColor: COLORS.bgSubtleMid,
-	},
-	attachmentChipTextBlock: {
-		gap: 1,
-		maxWidth: 200,
-	},
-	attachmentChipTitle: {
-		color: COLORS.textPrimary,
-		fontSize: 12,
-		fontWeight: "700",
-	},
-	attachmentChipMeta: {
-		color: "#B7AD9E",
-		fontSize: 10,
-	},
-	attachmentChipRemove: {
-		color: "#E7D7C0",
-		fontSize: 12,
-		fontWeight: "700",
-	},
-	statusPill: {
-		backgroundColor: COLORS.bgSubtleMid,
-		borderRadius: 999,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-	},
-	statusPillSuccess: {
-		backgroundColor: COLORS.successBg,
-	},
-	statusPillMuted: {
-		backgroundColor: "rgba(255, 248, 235, 0.08)",
-	},
-	statusPillText: {
-		color: "#E7DED1",
-		fontSize: 11,
-		fontWeight: "700",
-	},
-	statusPillTextSuccess: {
-		color: COLORS.successText,
-	},
-	statusPillTextMuted: {
-		color: "#C4BBAD",
-	},
-});
+// Re-export StatusPill for backwards compatibility
+export { messageStyles };

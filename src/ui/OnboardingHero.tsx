@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 interface OnboardingHeroProps {
 	eyebrow: string;
@@ -8,16 +8,26 @@ interface OnboardingHeroProps {
 }
 
 export function OnboardingHero({ eyebrow, title, intro }: OnboardingHeroProps) {
+	const { width: screenWidth } = useWindowDimensions();
+	const isTablet = screenWidth >= 680;
+
 	return (
 		<View style={styles.selectionHero}>
 			<Text style={styles.selectionEyebrow}>{eyebrow}</Text>
-			<Text style={styles.selectionTitle}>{title}</Text>
+			<Text
+				style={[
+					styles.selectionTitle,
+					isTablet ? styles.tabletTitle : null,
+				]}
+			>
+				{title}
+			</Text>
 			<Text style={styles.selectionIntro}>{intro}</Text>
 		</View>
 	);
 }
 
-const styles = {
+const styles = StyleSheet.create({
 	selectionHero: {
 		gap: 6,
 		paddingTop: 4,
@@ -42,4 +52,9 @@ const styles = {
 		fontWeight: "800",
 		lineHeight: 40,
 	},
-};
+	tabletTitle: {
+		fontSize: 40,
+		lineHeight: 46,
+		maxWidth: 600,
+	},
+});

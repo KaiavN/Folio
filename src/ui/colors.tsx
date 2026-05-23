@@ -1,5 +1,32 @@
 import React, { createContext, useContext } from "react";
-import { useColorScheme } from "react-native";
+import { useColorScheme, useWindowDimensions } from "react-native";
+
+// =============================================================================
+// RESPONSIVE SCALE — adapt to screen size
+// =============================================================================
+const PHONE_BREAKPOINT = 375;
+const TABLET_BREAKPOINT = 680;
+const LAPTOP_BREAKPOINT = 1024;
+
+export function useResponsiveScale() {
+	const { width, height } = useWindowDimensions();
+	const isTablet = width >= TABLET_BREAKPOINT;
+	const isLaptop = width >= LAPTOP_BREAKPOINT;
+	const isLandscape = width > height;
+	const horizontalScale = width / PHONE_BREAKPOINT;
+	const verticalScale = height / 812; // iPhone 12 Pro height baseline
+	const scale = Math.min(horizontalScale, verticalScale);
+	const clampedScale = Math.min(Math.max(scale, 0.85), 1.35);
+	return { width, height, isTablet, isLaptop, isLandscape, scale: clampedScale, horizontalScale };
+}
+
+export function useTypographyScale() {
+	const { scale, isTablet } = useResponsiveScale();
+	return {
+		scale,
+		fontScale: isTablet ? Math.min(scale, 1.15) : scale,
+	};
+}
 
 // =============================================================================
 // SPACING SCALE — semantic tokens for consistent spacing
@@ -15,6 +42,11 @@ export const spacing = {
 	xxxl: 48,
 	xxxxl: 64,
 } as const;
+
+// Responsive spacing multiplier for larger screens
+export function responsiveSpacing(base: typeof spacing): typeof spacing {
+	return base; // Used with useResponsiveScale() for actual scaling
+}
 
 // =============================================================================
 // TYPOGRAPHY SCALE — consistent text sizing and line heights
@@ -50,6 +82,14 @@ export const typography = {
 		lineHeight: 46,
 		fontWeight: "800" as const,
 	},
+} as const;
+
+// Responsive typography sizes for tablets/larger screens
+export const responsiveTypography = {
+	...typography,
+	title: { ...typography.title, fontSize: 24, lineHeight: 30 },
+	hero: { ...typography.hero, fontSize: 38, lineHeight: 48 },
+	heroLarge: { ...typography.heroLarge, fontSize: 44, lineHeight: 52 },
 } as const;
 
 // =============================================================================
