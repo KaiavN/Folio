@@ -46,7 +46,7 @@ export function LayoutShell({ children, style }: LayoutShellProps) {
 						paddingHorizontal: horizontalPadding,
 					},
 				]}
-				behavior={Platform.OS === "ios" ? "padding" : "padding"}
+				behavior={Platform.OS === "ios" ? "padding" : "height"}
 			>
 				<View
 					style={[

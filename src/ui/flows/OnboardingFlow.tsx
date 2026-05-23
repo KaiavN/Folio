@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+	ActivityIndicator,
 	Animated,
 	Easing,
 	Platform,
@@ -121,7 +122,7 @@ export function useOnboardingFlow(
 				/>
 
 				{state.catalogLoading && !state.catalogErrorMessage ? (
-					<Text style={styles.inlineNote}>Loading available models...</Text>
+					<ActivityIndicator size="small" color="#F6F1E8" />
 				) : null}
 				{state.catalogErrorMessage ? (
 					<Text style={styles.inlineNote}>{state.catalogErrorMessage}</Text>

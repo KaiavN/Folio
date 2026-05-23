@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
 	Modal,
 	Pressable,
@@ -53,14 +53,16 @@ export function ModelPicker({
 		return model.id === selectedArtifactId;
 	}
 
-	const sortedModels = [...models].sort((a, b) => {
-		const aAvail = isModelAvailable(a) ? 1 : 0;
-		const bAvail = isModelAvailable(b) ? 1 : 0;
-		if (aAvail !== bAvail) return bAvail - aAvail;
-		const aFeatured = a.id === featuredArtifactId ? 1 : 0;
-		const bFeatured = b.id === featuredArtifactId ? 1 : 0;
-		return bFeatured - aFeatured;
-	});
+	const sortedModels = useMemo(() => {
+		return [...models].sort((a, b) => {
+			const aAvail = isModelAvailable(a) ? 1 : 0;
+			const bAvail = isModelAvailable(b) ? 1 : 0;
+			if (aAvail !== bAvail) return bAvail - aAvail;
+			const aFeatured = a.id === featuredArtifactId ? 1 : 0;
+			const bFeatured = b.id === featuredArtifactId ? 1 : 0;
+			return bFeatured - aFeatured;
+		});
+	}, [models, featuredArtifactId]);
 
 	return (
 		<Modal

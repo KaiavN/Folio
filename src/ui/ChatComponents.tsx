@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Animated,
 	Clipboard,
@@ -155,7 +155,7 @@ export const ChatBubble = memo(function ChatBubble({
 
 // --- AttachmentChip ---
 
-export function AttachmentChip({
+export const AttachmentChip = memo(function AttachmentChip({
 	attachment,
 	removable = false,
 	onRemove,
@@ -174,6 +174,7 @@ export function AttachmentChip({
 				<Image
 					source={{ uri: attachment.localUri }}
 					style={messageStyles.attachmentChipThumbnail}
+					resizeMode={"cover"}
 				/>
 			)}
 			<View style={messageStyles.attachmentChipTextBlock}>
@@ -204,7 +205,7 @@ export function AttachmentChip({
 			) : null}
 		</View>
 	);
-}
+});
 
 // --- TypingBubble ---
 
@@ -226,11 +227,17 @@ export function TypingBubble({ label }: { label: string }) {
 
 // --- MessageText ---
 
-export function MessageText({ text, isUser }: { text: string; isUser: boolean }) {
-	const paragraphs = text
-		.split(/\n{2,}/)
-		.filter((paragraph) => paragraph.trim().length > 0);
-	const content = paragraphs.length ? paragraphs : [text];
+export const MessageText = memo(function MessageText({
+	text,
+	isUser,
+}: {
+	text: string;
+	isUser: boolean;
+}) {
+	const content = useMemo(() => {
+		const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim().length > 0);
+		return paragraphs.length ? paragraphs : [text];
+	}, [text]);
 
 	return (
 		<View style={messageStyles.messageParagraphGroup}>
@@ -249,7 +256,7 @@ export function MessageText({ text, isUser }: { text: string; isUser: boolean })
 			))}
 		</View>
 	);
-}
+});
 
 // --- TypingDots ---
 
@@ -326,7 +333,7 @@ export function TypingDots() {
 
 // --- StatusPill ---
 
-export function StatusPill({
+export const StatusPill = memo(function StatusPill({
 	label,
 	tone,
 }: {
@@ -354,7 +361,7 @@ export function StatusPill({
 			</Text>
 		</View>
 	);
-}
+});
 
 // --- Styles ---
 

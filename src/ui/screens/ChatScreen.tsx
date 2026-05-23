@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 import {
 	Platform,
 	Pressable,
-	ScrollView,
+	FlatList,
 	StyleSheet,
 	Text,
 	TextInput,
@@ -125,7 +125,7 @@ export function ChatScreen({
 			? Math.min(560, screenWidth * 0.65)
 			: Math.min(320, screenWidth * 0.85));
 
-	const messagesScrollRef = useRef<ScrollView | null>(null);
+	const messagesScrollRef = useRef<FlatList | null>(null);
 
 	// Auto-scroll when messages or busyAction changes
 	useEffect(() => {
@@ -253,6 +253,7 @@ export function ChatScreen({
 										key={prompt}
 										onPress={() => handleStarterPrompt(prompt)}
 										disabled={composerDisabled}
+										accessibilityLabel={prompt}
 										style={({ pressed }) => [
 											styles.starterPromptButton,
 											isTablet && tabletStyles.starterPromptButton,
@@ -291,7 +292,7 @@ export function ChatScreen({
 							onPress={() => void onPickAttachment()}
 							disabled={composerDisabled}
 							accessibilityRole="button"
-							accessibilityLabel="Add image from files"
+							accessibilityLabel="Select image from gallery"
 							style={({ pressed }) => [
 								styles.attachmentAction,
 								isTablet && tabletStyles.attachmentAction,
@@ -305,7 +306,7 @@ export function ChatScreen({
 							onPress={() => void onCaptureAttachment()}
 							disabled={composerDisabled}
 							accessibilityRole="button"
-							accessibilityLabel="Open camera for image attachment"
+							accessibilityLabel="Take photo"
 							style={({ pressed }) => [
 								styles.attachmentAction,
 								isTablet && tabletStyles.attachmentAction,
@@ -336,7 +337,7 @@ export function ChatScreen({
 						<Text style={styles.transcriptionPillText} numberOfLines={2}>
 							{speechState.partialTranscription}
 						</Text>
-						<Pressable onPress={onCancelRecording}>
+						<Pressable onPress={onCancelRecording} accessibilityLabel="Dismiss transcription">
 							<Text style={styles.transcriptionPillDismiss}>Dismiss</Text>
 						</Pressable>
 					</View>
