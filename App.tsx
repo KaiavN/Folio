@@ -1066,6 +1066,7 @@ export default function App() {
 									text: stripSpecialTokens(chunk.accumulatedText),
 									meta: "Generating on-device...",
 									streaming: true,
+									failed: false,
 								}),
 							);
 						},
@@ -1101,16 +1102,17 @@ export default function App() {
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									preparedArtifact?.localUri ?? "artifact cache pending",
+									"",
 								)}`
 							: formatGenerationMeta(
 									generation.backendId,
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									preparedArtifact?.localUri ?? "artifact cache pending",
+									"",
 								),
 					streaming: false,
+					failed: false,
 				}),
 			);
 		} catch (error) {
