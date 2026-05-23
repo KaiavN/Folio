@@ -180,8 +180,7 @@ export async function prepareArtifact(
 			const localArtifactMarkerFile =
 				ensureLocalArtifactPackageMarkerFile(manifest);
 			const extractedArtifactDirectory = ensureLocalArtifactDirectory(manifest);
-			console.log(`[prepareArtifact] artifactId=${manifest.artifactId} localArtifactFile=${localArtifactFile.uri} exists=${localArtifactFile.exists} markerFile=${localArtifactMarkerFile.uri} markerExists=${localArtifactMarkerFile.exists} extractedDir=${extractedArtifactDirectory.uri}`);
-			emitPreparationProgress(onProgress, {
+						emitPreparationProgress(onProgress, {
 				phase: "checking-cache",
 				progress: 0.08,
 			});
@@ -243,8 +242,7 @@ export async function prepareArtifact(
 				transferredBytes: localArtifactFile.size,
 				totalBytes: expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
 			});
-			console.log(`[prepareArtifact] artifactFileIsValid check: file=${localArtifactFile.uri} exists=${localArtifactFile.exists} marker=${localArtifactMarkerFile.uri} markerExists=${localArtifactMarkerFile.exists}`);
-
+			
 			if (
 				!artifactFileIsValid(
 					localArtifactFile,
@@ -264,8 +262,7 @@ export async function prepareArtifact(
 				totalBytes: expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
 			});
 
-			console.log(`[prepareArtifact] calling extractPackageIfNeeded localArtifactFile=${localArtifactFile.uri} exists=${localArtifactFile.exists} size=${localArtifactFile.size}`);
-			try {
+						try {
 				await extractPackageIfNeeded(
 					localArtifactFile,
 					extractedArtifactDirectory,
@@ -373,21 +370,17 @@ export function inspectPreparedArtifact(
 
 	// Log detection path for debugging artifact cache misses
 	const logPrefix = `[inspectPreparedArtifact] model=${manifest.modelId} backend=${manifest.backendId} quantization=${manifest.quantization}`;
-	console.log(`${logPrefix} extractedDir=${extractedArtifactDirectory.uri} dirExists=${extractedArtifactDirectory.exists}`);
-
+	
 	const isValid = extractedArtifactDirectoryIsValid(extractedArtifactDirectory);
-	console.log(`${logPrefix} isValid=${isValid}`);
-
+	
 	if (!isValid) {
 		// Log why it's invalid for debugging
 		const manifestFile = new File(extractedArtifactDirectory, "folio-export-manifest.json");
 		const runtimeManifestFile = new File(extractedArtifactDirectory, ARTIFACT_RUNTIME_MANIFEST_FILE);
-		console.log(`${logPrefix} manifestFile.exists=${manifestFile.exists} runtimeManifestFile.exists=${runtimeManifestFile.exists}`);
-
+		
 		// Check for .pte files as fallback detection
 		const hasPte = hasAnyPteFile(extractedArtifactDirectory);
-		console.log(`${logPrefix} hasPteFallback=${hasPte}`);
-
+		
 		return null;
 	}
 
@@ -398,8 +391,7 @@ export function inspectPreparedArtifact(
 			extractedArtifactDirectory,
 			extractedManifest.modelFile,
 		);
-		console.log(`${logPrefix} modelFile=${extractedManifest.modelFile} exists=${modelFile.exists}`);
-		if (!modelFile.exists) {
+				if (!modelFile.exists) {
 			return null;
 		}
 	}
@@ -796,30 +788,23 @@ async function extractPackageIfNeeded(
 	destinationDirectory: Directory,
 	packageFormat: ArtifactManifest["packageFormat"],
 ): Promise<void> {
-	console.log(`[extractPackageIfNeeded] packageFile=${packageFile.uri} exists=${packageFile.exists} size=${packageFile.exists ? packageFile.size : "N/A"} destinationDir=${destinationDirectory.uri}`);
-
+	
 	if (extractedArtifactDirectoryIsValid(destinationDirectory)) {
-		console.log(`[extractPackageIfNeeded] destination already valid, skipping`);
-		return;
+				return;
 	}
 
-	console.log(`[extractPackageIfNeeded] destination not valid, will extract. exists=${destinationDirectory.exists}`);
-
+	
 	if (destinationDirectory.exists) {
-		console.log(`[extractPackageIfNeeded] deleting existing destination directory`);
-		destinationDirectory.delete();
+				destinationDirectory.delete();
 	}
 
-	console.log(`[extractPackageIfNeeded] creating destination directory with intermediates=true`);
-	try {
+		try {
 		destinationDirectory.create({
 			idempotent: true,
 			intermediates: true,
 		});
-		console.log(`[extractPackageIfNeeded] create() returned, exists=${destinationDirectory.exists}`);
-	} catch (createErr) {
-		console.log(`[extractPackageIfNeeded] create() threw: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
-		throw createErr;
+			} catch (createErr) {
+				throw createErr;
 	}
 
 	if (!destinationDirectory.exists) {
@@ -839,34 +824,26 @@ async function extractPackageIfNeeded(
 	try {
 		const sourcePath = filesystemPathOf(packageFile.uri);
 		const destPath = filesystemPathOf(destinationDirectory.uri);
-		console.log(`[extractPackageIfNeeded] unzip source=${sourcePath} dest=${destPath} packageFileExists=${packageFile.exists} packageFileSize=${packageFile.size}`);
-		await unzip(sourcePath, destPath);
-		console.log(`[extractPackageIfNeeded] unzip completed, dest exists=${destinationDirectory.exists}`);
-
+				await unzip(sourcePath, destPath);
+		
 		// Detect if zip extracted to a single subdirectory (common pattern where the zip
 		// bundles contents inside a named folder). If so, flatten by moving contents up.
 		await flattenSingleSubdirectory(destinationDirectory);
 
 		const entries = destinationDirectory.list();
-		console.log(`[extractPackageIfNeeded] dest entries count=${entries.length}`);
-		for (const entry of entries) {
-			console.log(`[extractPackageIfNeeded] entry: ${entry.name} isFile=${entry instanceof File}`);
-		}
-
+		
 		// CRITICAL: Verify the extraction actually produced files
 		if (entries.length === 0) {
 			throw new Error(`Extraction produced no files in ${destinationDirectory.uri}. The zip file may be empty or corrupt.`);
 		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		console.log(`[extractPackageIfNeeded] unzip failed: ${message}`);
-		throw new Error(`Failed to extract ${packageFile.uri}: ${message}`);
+				throw new Error(`Failed to extract ${packageFile.uri}: ${message}`);
 	}
 
 	const discoveredManifest =
 		readExtractedArtifactManifest(destinationDirectory);
-	console.log(`[extractPackageIfNeeded] discoveredManifest=${discoveredManifest ? `modelFile=${discoveredManifest.modelFile} tokenizerFile=${discoveredManifest.tokenizerFile}` : "null"}`);
-	if (!discoveredManifest) {
+		if (!discoveredManifest) {
 		throw new Error(
 			`Extracted package for ${packageFile.uri} is missing a runnable .pte payload.`,
 		);
@@ -888,8 +865,7 @@ async function flattenSingleSubdirectory(destinationDirectory: Directory): Promi
 	}
 
 	const subdir = entries[0] as Directory;
-	console.log(`[flattenSingleSubdirectory] detected single subdirectory="${subdir.name}", flattening`);
-
+	
 	try {
 		const subdirEntries = subdir.list();
 		for (const entry of subdirEntries) {
@@ -903,8 +879,7 @@ async function flattenSingleSubdirectory(destinationDirectory: Directory): Promi
 		}
 		// Remove the now-empty subdirectory
 		subdir.delete();
-		console.log(`[flattenSingleSubdirectory] flattened successfully`);
-	} catch (error) {
+			} catch (error) {
 		// If flattening fails (e.g., name collision), log and continue without flattening.
 		// The original subdirectory layout will be used as-is.
 		console.warn(`[flattenSingleSubdirectory] failed to flatten: ${error instanceof Error ? error.message : String(error)}`);
@@ -1052,8 +1027,7 @@ async function downloadArtifactPackage(
 ): Promise<void> {
 	const tempArtifactFile = ensureLocalArtifactTempFile(manifest);
 
-	console.log(`[downloadArtifactPackage] source=${sourceUri} localArtifactFile=${localArtifactFile.uri} tempFile=${tempArtifactFile.uri} remainingRetries=${remainingRetries}`);
-
+	
 	if (localArtifactFile.exists) {
 		localArtifactFile.delete();
 	}
@@ -1137,8 +1111,7 @@ async function downloadArtifactPackage(
 	}
 
 	const completedBytes = tempArtifactFile.size;
-	console.log(`[downloadArtifactPackage] download completed tempFile=${tempArtifactFile.uri} size=${completedBytes}`);
-	emitPreparationProgress(onProgress, {
+		emitPreparationProgress(onProgress, {
 		phase: "downloading",
 		progress: 0.8,
 		transferredBytes: completedBytes,

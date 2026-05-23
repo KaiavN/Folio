@@ -35,6 +35,8 @@ const TTT_WIN_LINES = [
 	[2, 4, 6],
 ];
 
+const BOT_MOVE_DELAY_MS = 420;
+
 const PONG_WIDTH = 264;
 const PONG_HEIGHT = 208;
 const PADDLE_WIDTH = 74;

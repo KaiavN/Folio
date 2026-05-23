@@ -29,6 +29,11 @@ import {
 	buildArtifactManifest,
 	validateArtifactManifest,
 } from "./src/engine/artifacts.ts";
+
+const ANIMATION_DURATION_MS = 300;
+const MODEL_ACTIVATION_TIMEOUT_MS = 3 * 60 * 1000;
+const MODEL_PREPARE_TIMEOUT_MS = 2 * 60 * 1000;
+const AUTO_SCROLL_DELAY_MS = 4000;
 import {
 	getPreviewDeviceForRuntime,
 	MODEL_ARTIFACTS,
@@ -362,7 +367,7 @@ export default function App() {
 		if (!reduceMotion) {
 			Animated.timing(onboardingMotion, {
 				toValue: 1,
-				duration: 300,
+				duration: ANIMATION_DURATION_MS,
 				easing: Easing.out(Easing.poly(4)),
 				useNativeDriver: true,
 			}).start();
@@ -443,9 +448,7 @@ export default function App() {
 		if (busyAction === "activating-model") return;
 		if (didCheckArtifactRef.current) return;
 
-		console.log(`[artifact-check] running hasStartedSetup=${hasStartedSetup} runtimeInfo=${!!runtimeInfo} catalogModels=${catalogModels.length} session=${session?.status} fallbackOffer=${!!fallbackOffer} busyAction=${busyAction} routingDecision.selectedBackend=${routingDecision.selectedBackend} routingDecision.selectedArtifact=${!!routingDecision.selectedArtifact} availableBackends=${availableBackends.map(b => `${b.id}:${b.available}`).join(", ")}`);
-		console.log(`[artifact-check] previewDevice=${previewDevice.id} preferredBackends=${previewDevice.preferredBackends.join(", ")}`);
-
+		
 		function resetToOnboarding() {
 			setHasStartedSetup(false);
 			setOnboardingStage("select-model");
@@ -473,8 +476,7 @@ export default function App() {
 				routingDecision.selectedArtifact,
 			);
 			const cached = manifest ? inspectPreparedArtifact(manifest) : null;
-			console.log(`[artifact-check] routing=selected backend=${routingDecision.selectedBackend} manifest=${manifest?.modelId}/${manifest?.backendId}/${manifest?.quantization} cached=${cached?.cacheState ?? "null"}`);
-			if (cached?.cacheState === "hit") {
+						if (cached?.cacheState === "hit") {
 				didCheckArtifactRef.current = true;
 				return;
 			}
@@ -491,8 +493,7 @@ export default function App() {
 					candidate,
 				);
 				const candidateCached = candidateManifest ? inspectPreparedArtifact(candidateManifest) : null;
-				console.log(`[artifact-check] fallback-candidate backend=${candidate.backend} quantization=${candidate.quantization} cached=${candidateCached?.cacheState ?? "null"}`);
-				if (
+								if (
 					candidateManifest &&
 					candidateCached?.cacheState === "hit"
 				) {
@@ -524,8 +525,7 @@ export default function App() {
 		for (const candidate of candidates) {
 			const manifest = buildArtifactManifest(selectedArtifact, candidate);
 			const cached = manifest ? inspectPreparedArtifact(manifest) : null;
-			console.log(`[artifact-check] routing=null candidate backend=${candidate.backend} quantization=${candidate.quantization} cached=${cached?.cacheState ?? "null"}`);
-			if (manifest && cached?.cacheState === "hit") {
+						if (manifest && cached?.cacheState === "hit") {
 				setFallbackOffer({
 					preferredBackendName: preferredBackend ?? candidate.backend,
 					fallbackArtifact: candidate,
@@ -691,10 +691,10 @@ export default function App() {
 							);
 							setBusyAction(null);
 						},
-						3 * 60 * 1000,
+						MODEL_ACTIVATION_TIMEOUT_MS,
 					);
 				},
-				2 * 60 * 1000,
+				MODEL_PREPARE_TIMEOUT_MS,
 			);
 		}
 
@@ -1327,7 +1327,7 @@ export default function App() {
 				setSpeechState((prev) =>
 					prev.status === "error" ? { ...prev, status: "idle", error: null } : prev,
 				);
-			}, 4000);
+			}, AUTO_SCROLL_DELAY_MS);
 			return () => clearTimeout(timer);
 		}
 	}, [speechState.error]);

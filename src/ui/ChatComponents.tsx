@@ -18,6 +18,11 @@ import { messageStyles } from "./styles/chatBubbleStyles.ts";
 
 const COLORS = darkColors;
 
+const MESSAGE_ENTRANCE_DURATION_MS = 260;
+const TYPING_DOTS_STAGGER_MS = 180;
+const SPRING_STIFFNESS = 180;
+const SPRING_DAMPING = 12;
+
 const buttonPressed = {
 	opacity: 0.88,
 	transform: [{ scale: 0.985 }],
@@ -43,7 +48,7 @@ export const ChatBubble = memo(function ChatBubble({
 	useEffect(() => {
 		Animated.timing(entrance, {
 			toValue: 1,
-			duration: 260,
+			duration: MESSAGE_ENTRANCE_DURATION_MS,
 			easing: Easing.out(Easing.poly(4)),
 			useNativeDriver: true,
 		}).start();
@@ -263,19 +268,19 @@ export function TypingDots() {
 				if (cancelled || isReduceMotionEnabled) return;
 				loop = Animated.loop(
 					Animated.stagger(
-						180,
+						TYPING_DOTS_STAGGER_MS,
 						[bounce1, bounce2, bounce3].map((bounce) =>
 							Animated.sequence([
 								Animated.spring(bounce, {
 									toValue: 1,
-									damping: 12,
-									stiffness: 180,
+									damping: SPRING_DAMPING,
+									stiffness: SPRING_STIFFNESS,
 									useNativeDriver: true,
 								}),
 								Animated.spring(bounce, {
 									toValue: 0,
-									damping: 12,
-									stiffness: 180,
+									damping: SPRING_DAMPING,
+									stiffness: SPRING_STIFFNESS,
 									useNativeDriver: true,
 								}),
 							]),

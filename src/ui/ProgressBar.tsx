@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 import { useColors } from "./colors.tsx";
 
+const PROGRESS_BAR_ANIMATION_DURATION_MS = 240;
+
 export function ProgressBar({ progress }: { progress: number }) {
 	const COLORS = useColors();
 	const clampedProgress = Math.min(Math.max(progress, 0), 1);
