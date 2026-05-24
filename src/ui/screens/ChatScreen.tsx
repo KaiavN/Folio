@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import {
-	FlatList,
 	Platform,
 	Pressable,
 	ScrollView,
@@ -9,7 +8,6 @@ import {
 	TextInput,
 	View,
 	useWindowDimensions,
-	ActivityIndicator,
 } from "react-native";
 
 import type { ChatAttachment, ChatMessage, SpeechRecognitionState } from "../../engine/types.ts";
