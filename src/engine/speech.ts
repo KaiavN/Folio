@@ -181,6 +181,11 @@ class SpeechRecognitionService {
     this.currentOnResult = null;
     this.currentOnError = null;
     try {
+      Voice.destroy();
+    } catch {
+      // ignore destroy errors
+    }
+    try {
       Voice.cancel();
     } catch {
       // ignore cancel errors

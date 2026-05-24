@@ -945,6 +945,7 @@ export default function App() {
 						text: notReadyText,
 						meta: "Model not ready",
 						streaming: false,
+						failed: false,
 					}),
 				);
 			} else {
