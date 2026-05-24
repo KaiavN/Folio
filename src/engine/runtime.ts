@@ -283,63 +283,10 @@ export async function prepareArtifact(
 					manifest.packageFormat,
 				);
 			} catch (error) {
-				if (localArtifactFile.exists) {
-					localArtifactFile.delete();
-				}
-				clearArtifactPackageMarker(localArtifactMarkerFile);
 				if (extractedArtifactDirectory.exists) {
 					extractedArtifactDirectory.delete();
 				}
-
-				await downloadArtifactPackage(
-					sourceUri,
-					manifest,
-					expectedPackageSizeBytes,
-					localArtifactFile,
-					localArtifactMarkerFile,
-					onProgress,
-				);
-				emitPreparationProgress(onProgress, {
-					phase: "verifying-package",
-					progress: 0.84,
-					transferredBytes: localArtifactFile.size,
-					totalBytes:
-						expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
-				});
-
-				if (
-					!artifactFileIsValid(
-						localArtifactFile,
-						localArtifactMarkerFile,
-						manifest,
-					)
-				) {
-					throw new Error(
-						`Downloaded package for ${manifest.artifactId} did not pass local verification.`,
-					);
-				}
-
-				emitPreparationProgress(onProgress, {
-					phase: "extracting",
-					progress: 0.92,
-					transferredBytes: localArtifactFile.size,
-					totalBytes:
-						expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
-				});
-
-				try {
-					await extractPackageIfNeeded(
-						localArtifactFile,
-						extractedArtifactDirectory,
-						manifest.packageFormat,
-					);
-				} catch (err) {
-					// Second extraction failed — clean up extracted directory so next attempt starts fresh
-					if (extractedArtifactDirectory.exists) {
-						extractedArtifactDirectory.delete();
-					}
-					throw err;
-				}
+				throw error;
 			}
 			emitPreparationProgress(onProgress, {
 				phase: "ready",
