@@ -32,6 +32,14 @@ const CAPABILITY_LABELS: Record<string, string> = {
 	reasoning: "Reasoning",
 };
 
+function isModelAvailable(model: ModelArtifactDescriptor): boolean {
+	return model.artifacts.length > 0;
+}
+
+function isSelected(model: ModelArtifactDescriptor, selectedArtifactId: string): boolean {
+	return model.id === selectedArtifactId;
+}
+
 export function ModelPicker({
 	open,
 	models,
@@ -41,17 +49,8 @@ export function ModelPicker({
 	onClose,
 	onSelect,
 }: ModelPickerProps) {
-	const COLORS = useColors();
 	const { width: screenWidth } = useWindowDimensions();
 	const isTablet = screenWidth >= 680;
-
-	function isModelAvailable(model: ModelArtifactDescriptor): boolean {
-		return model.artifacts.length > 0;
-	}
-
-	function isSelected(model: ModelArtifactDescriptor): boolean {
-		return model.id === selectedArtifactId;
-	}
 
 	const sortedModels = useMemo(() => {
 		return [...models].sort((a, b) => {
@@ -111,7 +110,7 @@ export function ModelPicker({
 						) : null}
 						{sortedModels.map((model) => {
 							const available = isModelAvailable(model);
-							const selected = isSelected(model);
+							const selected = isSelected(model, selectedArtifactId);
 							const backends = model.compatibleBackends;
 							const visibleBackends = backends.slice(0, 2);
 							const extraBackendCount = backends.length - 2;
