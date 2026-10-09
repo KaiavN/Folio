@@ -19,7 +19,6 @@ export type { SpeechRecognitionOptions, SpeechRecognitionResult };
 const RECORDING_TIMEOUT_MS = 30000;
 
 class SpeechRecognitionService {
-  private sessionId = 0;
   private currentOnResult: ((result: SpeechRecognitionResult) => void) | null = null;
   private currentOnError: ((error: string) => void) | null = null;
   private currentSessionId = 0;
@@ -92,12 +91,12 @@ class SpeechRecognitionService {
     const { onResult, onError, locale = 'en-US' } = options;
     this.currentOnResult = onResult;
     this.currentOnError = onError ?? null;
-    const thisSession = ++this.sessionId;
-    this.currentSessionId = thisSession;
+    const thisSession = ++this.currentSessionId;
+    const capturedSessionId = thisSession;
 
     // Android permission check
     const hasPermission = await this.requestAndroidPermission();
-    if (thisSession !== this.currentSessionId) return;
+    if (capturedSessionId !== this.currentSessionId) return;
     if (!hasPermission) {
       if (this.currentOnError) {
         this.currentOnError('Microphone permission denied');
@@ -108,7 +107,7 @@ class SpeechRecognitionService {
     // Check availability
     try {
       const isAvailable = await Voice.isAvailable();
-      if (thisSession !== this.currentSessionId) return;
+      if (capturedSessionId !== this.currentSessionId) return;
       if (!isAvailable) {
         if (this.currentOnError) {
           this.currentOnError('Speech recognition is not available on this device');
@@ -116,7 +115,7 @@ class SpeechRecognitionService {
         return;
       }
     } catch {
-      if (thisSession !== this.currentSessionId) return;
+      if (capturedSessionId !== this.currentSessionId) return;
       if (this.currentOnError) {
         this.currentOnError('Failed to check speech recognition availability');
       }
@@ -146,7 +145,7 @@ class SpeechRecognitionService {
     } catch (error) {
       this.isCurrentlyRecognizing = false;
       this.clearSilenceTimeout();
-      if (thisSession !== this.currentSessionId) return;
+      if (capturedSessionId !== this.currentSessionId) return;
       if (this.currentOnError) {
         this.currentOnError(
           error instanceof Error ? error.message : 'Failed to start speech recognition',
@@ -181,6 +180,11 @@ class SpeechRecognitionService {
     this.currentOnResult = null;
     this.currentOnError = null;
     try {
+      if (Platform.OS === 'android') {
+        Voice.destroy();
+      } else {
+        Voice.cancel();
+      }
       Voice.destroy();
     } catch {
       // ignore destroy errors
