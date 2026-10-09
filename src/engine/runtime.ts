@@ -58,6 +58,37 @@ const ARTIFACT_DOWNLOAD_RETRIES = 3;
 const ARTIFACT_DOWNLOAD_RETRY_DELAY_MS = 1200;
 const inFlightArtifactPrepares = new Map<string, Promise<PreparedArtifact>>();
 
+// Semaphore to limit concurrent artifact downloads to 2, preventing memory pressure
+const MAX_CONCURRENT_DOWNLOADS = 2;
+const downloadSlots: Array<() => void> = [];
+const downloadWaitQueue: Array<() => void> = [];
+
+for (let i = 0; i < MAX_CONCURRENT_DOWNLOADS; i++) {
+  downloadSlots.push(() => {});
+}
+
+async function awaitDownloadSlot(): Promise<() => void> {
+  if (downloadSlots.length > 0) {
+    const release = downloadSlots.pop()!;
+    return release;
+  }
+  return new Promise((resolve) => {
+    downloadWaitQueue.push(() => {
+      const release = downloadSlots.pop()!;
+      resolve(release);
+    });
+  });
+}
+
+function releaseDownloadSlot(): void {
+  const next = downloadWaitQueue.shift();
+  if (next) {
+    next();
+  } else {
+    downloadSlots.push(() => {});
+  }
+}
+
 function withTimeout<T>(
 	promise: Promise<T>,
 	timeoutMs: number,
@@ -130,13 +161,27 @@ export async function bootstrapRuntime(): Promise<{
 	);
 	const availableBackends =
 		FolioExecuTorchEngineModule.getAvailableBackends().map(mapBackend);
-	const telemetry = mapTelemetry(
-		await withTimeout(
-			FolioExecuTorchEngineModule.getTelemetrySnapshotAsync(),
-			BOOTSTRAP_TIMEOUT_MS,
-			"Runtime bootstrap",
-		),
-	);
+
+	let telemetry: TelemetrySnapshot;
+	try {
+		telemetry = mapTelemetry(
+			await withTimeout(
+				FolioExecuTorchEngineModule.getTelemetrySnapshotAsync(),
+				BOOTSTRAP_TIMEOUT_MS,
+				"Runtime bootstrap",
+			),
+		);
+	} catch {
+		// Telemetry is best-effort — continue with null telemetry rather than
+		// failing the entire bootstrap, which would block all model interactions.
+		telemetry = {
+			ttftMs: null,
+			decodeTokensPerSecond: null,
+			peakMemoryMb: null,
+			queueDepth: null,
+			lastRoute: null,
+		};
+	}
 
 	return {
 		runtimeInfo,
@@ -269,63 +314,10 @@ export async function prepareArtifact(
 					manifest.packageFormat,
 				);
 			} catch (error) {
-				if (localArtifactFile.exists) {
-					localArtifactFile.delete();
-				}
-				clearArtifactPackageMarker(localArtifactMarkerFile);
 				if (extractedArtifactDirectory.exists) {
 					extractedArtifactDirectory.delete();
 				}
-
-				await downloadArtifactPackage(
-					sourceUri,
-					manifest,
-					expectedPackageSizeBytes,
-					localArtifactFile,
-					localArtifactMarkerFile,
-					onProgress,
-				);
-				emitPreparationProgress(onProgress, {
-					phase: "verifying-package",
-					progress: 0.84,
-					transferredBytes: localArtifactFile.size,
-					totalBytes:
-						expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
-				});
-
-				if (
-					!artifactFileIsValid(
-						localArtifactFile,
-						localArtifactMarkerFile,
-						manifest,
-					)
-				) {
-					throw new Error(
-						`Downloaded package for ${manifest.artifactId} did not pass local verification.`,
-					);
-				}
-
-				emitPreparationProgress(onProgress, {
-					phase: "extracting",
-					progress: 0.92,
-					transferredBytes: localArtifactFile.size,
-					totalBytes:
-						expectedPackageSizeBytes ?? localArtifactFile.size ?? null,
-				});
-
-				try {
-					await extractPackageIfNeeded(
-						localArtifactFile,
-						extractedArtifactDirectory,
-						manifest.packageFormat,
-					);
-				} catch (err) {
-					// Second extraction failed — clean up extracted directory so next attempt starts fresh
-					if (extractedArtifactDirectory.exists) {
-						extractedArtifactDirectory.delete();
-					}
-					throw err;
-				}
+				throw error;
 			}
 			emitPreparationProgress(onProgress, {
 				phase: "ready",
@@ -770,8 +762,7 @@ function mapChatAttachment(
 		name: attachment.name,
 		localUri: attachment.localUri,
 		mimeType: attachment.mimeType,
-		source:
-			attachment.source === "voice" ? "file" : (attachment.source as "camera" | "file"),
+		source: attachment.source === "file" ? "file" : "camera",
 		width: attachment.width,
 		height: attachment.height,
 	};
@@ -1019,184 +1010,188 @@ async function downloadArtifactPackage(
 	onProgress?: (progress: ArtifactPreparationProgress) => void,
 	remainingRetries = ARTIFACT_DOWNLOAD_RETRIES,
 ): Promise<void> {
-	const tempArtifactFile = ensureLocalArtifactTempFile(manifest);
-
-	
-	if (localArtifactFile.exists) {
-		localArtifactFile.delete();
-	}
-	clearArtifactPackageMarker(markerFile);
-
-	// Only delete temp file on fresh attempt, not retry — preserve partial downloads
-	const shouldDeleteTemp = remainingRetries === ARTIFACT_DOWNLOAD_RETRIES;
-	if (shouldDeleteTemp && tempArtifactFile.exists) {
-		tempArtifactFile.delete();
-	}
-
-	// Download artifact
-	const downloadTask = createDownloadResumable(
-		sourceUri,
-		tempArtifactFile.uri,
-		{},
-		(event: DownloadProgressData) => {
-			const expectedBytes =
-				event.totalBytesExpectedToWrite > 0
-					? event.totalBytesExpectedToWrite
-					: (expectedPackageSizeBytes ?? null);
-			const ratio =
-				expectedBytes && expectedBytes > 0
-					? Math.min(event.totalBytesWritten / expectedBytes, 1)
-					: 0;
-			emitPreparationProgress(onProgress, {
-				phase: "downloading",
-				progress: 0.12 + ratio * 0.68,
-				transferredBytes: event.totalBytesWritten,
-				totalBytes: expectedBytes,
-			});
-		},
-	);
-
-	let downloadResult: Awaited<ReturnType<typeof downloadTask.downloadAsync>>;
+	const releaseSlot = await awaitDownloadSlot();
 	try {
-		downloadResult = await downloadTask.downloadAsync();
-	} catch (networkError) {
-		const message =
-			networkError instanceof Error
-				? networkError.message
-				: String(networkError);
-		const isTransient =
-			message.includes("network") ||
-			message.includes("timeout") ||
-			message.includes("aborted") ||
-			message.includes("interrupted") ||
-			message.includes("offline") ||
-			message.includes("ENOTFOUND") ||
-			message.includes("ECONNREFUSED") ||
-			message.includes("ECONNRESET");
+		const tempArtifactFile = ensureLocalArtifactTempFile(manifest);
 
-		if (isTransient && remainingRetries > 0) {
-			emitPreparationProgress(onProgress, {
-				phase: "downloading",
-				progress: 0.12,
-				transferredBytes: 0,
-				totalBytes: expectedPackageSizeBytes ?? null,
-			});
-			await delay(
-				ARTIFACT_DOWNLOAD_RETRY_DELAY_MS *
-					(ARTIFACT_DOWNLOAD_RETRIES - remainingRetries + 1),
-			);
-			return downloadArtifactPackage(
-				sourceUri,
-				manifest,
-				expectedPackageSizeBytes,
-				localArtifactFile,
-				markerFile,
-				onProgress,
-				remainingRetries - 1,
+		if (localArtifactFile.exists) {
+			localArtifactFile.delete();
+		}
+		clearArtifactPackageMarker(markerFile);
+
+		// Only delete temp file on fresh attempt, not retry — preserve partial downloads
+		const shouldDeleteTemp = remainingRetries === ARTIFACT_DOWNLOAD_RETRIES;
+		if (shouldDeleteTemp && tempArtifactFile.exists) {
+			tempArtifactFile.delete();
+		}
+
+		// Download artifact
+		const downloadTask = createDownloadResumable(
+			sourceUri,
+			tempArtifactFile.uri,
+			{},
+			(event: DownloadProgressData) => {
+				const expectedBytes =
+					event.totalBytesExpectedToWrite > 0
+						? event.totalBytesExpectedToWrite
+						: (expectedPackageSizeBytes ?? null);
+				const ratio =
+					expectedBytes && expectedBytes > 0
+						? Math.min(event.totalBytesWritten / expectedBytes, 1)
+						: 0;
+				emitPreparationProgress(onProgress, {
+					phase: "downloading",
+					progress: 0.12 + ratio * 0.68,
+					transferredBytes: event.totalBytesWritten,
+					totalBytes: expectedBytes,
+				});
+			},
+		);
+
+		let downloadResult: Awaited<ReturnType<typeof downloadTask.downloadAsync>>;
+		try {
+			downloadResult = await downloadTask.downloadAsync();
+		} catch (networkError) {
+			const message =
+				networkError instanceof Error
+					? networkError.message
+					: String(networkError);
+			const isTransient =
+				message.includes("network") ||
+				message.includes("timeout") ||
+				message.includes("aborted") ||
+				message.includes("interrupted") ||
+				message.includes("offline") ||
+				message.includes("ENOTFOUND") ||
+				message.includes("ECONNREFUSED") ||
+				message.includes("ECONNRESET");
+
+			if (isTransient && remainingRetries > 0) {
+				emitPreparationProgress(onProgress, {
+					phase: "downloading",
+					progress: 0.12,
+					transferredBytes: 0,
+					totalBytes: expectedPackageSizeBytes ?? null,
+				});
+				await delay(
+					ARTIFACT_DOWNLOAD_RETRY_DELAY_MS *
+						(ARTIFACT_DOWNLOAD_RETRIES - remainingRetries + 1),
+				);
+				return downloadArtifactPackage(
+					sourceUri,
+					manifest,
+					expectedPackageSizeBytes,
+					localArtifactFile,
+					markerFile,
+					onProgress,
+					remainingRetries - 1,
+				);
+			}
+			throw new Error(
+				`Download failed for ${manifest.artifactId}${isTransient ? " after retries" : ""}: ${message}`,
 			);
 		}
-		throw new Error(
-			`Download failed for ${manifest.artifactId}${isTransient ? " after retries" : ""}: ${message}`,
-		);
-	}
 
-	if (!downloadResult) {
-		throw new Error(`Download was cancelled for ${manifest.artifactId}.`);
-	}
+		if (!downloadResult) {
+			throw new Error(`Download was cancelled for ${manifest.artifactId}.`);
+		}
 
-	const completedBytes = tempArtifactFile.size;
+		const completedBytes = tempArtifactFile.size;
 		emitPreparationProgress(onProgress, {
-		phase: "downloading",
-		progress: 0.8,
-		transferredBytes: completedBytes,
-		totalBytes: expectedPackageSizeBytes ?? completedBytes ?? null,
-	});
+			phase: "downloading",
+			progress: 0.8,
+			transferredBytes: completedBytes,
+			totalBytes: expectedPackageSizeBytes ?? completedBytes ?? null,
+		});
 
-	if (
-		!downloadResponseLooksValid(
-			downloadResult.status,
-			downloadResult.mimeType,
-			manifest,
-			completedBytes,
-			expectedPackageSizeBytes,
-		)
-	) {
-		throw new Error(
-			describeUnexpectedArtifactResponse(
-				manifest,
+		if (
+			!downloadResponseLooksValid(
 				downloadResult.status,
 				downloadResult.mimeType,
-			),
-		);
-	}
-
-	if (
-		!downloadedArtifactFileIsComplete(
-			tempArtifactFile,
-			expectedPackageSizeBytes,
-		)
-	) {
-		throw new Error(
-			`Downloaded package for ${manifest.artifactId} did not pass local verification.`,
-		);
-	}
-
-	if (localArtifactFile.exists) {
-		localArtifactFile.delete();
-	}
-
-	try {
-		tempArtifactFile.move(localArtifactFile);
-	} catch (error) {
-		if (!localArtifactFile.exists) {
-			// localArtifactFile doesn't exist, but tempArtifactFile remains — clean it up
-			try {
-				tempArtifactFile.delete();
-			} catch {
-				// ignore cleanup failure
-			}
-			throw error;
+				manifest,
+				completedBytes,
+				expectedPackageSizeBytes,
+			)
+		) {
+			throw new Error(
+				describeUnexpectedArtifactResponse(
+					manifest,
+					downloadResult.status,
+					downloadResult.mimeType,
+				),
+			);
 		}
 
-		try {
+		if (
+			!downloadedArtifactFileIsComplete(
+				tempArtifactFile,
+				expectedPackageSizeBytes,
+			)
+		) {
+			throw new Error(
+				`Downloaded package for ${manifest.artifactId} did not pass local verification.`,
+			);
+		}
+
+		if (localArtifactFile.exists) {
 			localArtifactFile.delete();
-		} catch {
-			try {
-				tempArtifactFile.delete();
-			} catch {
-				// ignore cleanup failure
-			}
-			throw error;
 		}
+
 		try {
 			tempArtifactFile.move(localArtifactFile);
-		} catch {
+		} catch (error) {
+			if (!localArtifactFile.exists) {
+				// localArtifactFile doesn't exist, but tempArtifactFile remains — clean it up
+				try {
+					tempArtifactFile.delete();
+				} catch {
+					// ignore cleanup failure
+				}
+				throw error;
+			}
+
 			try {
-				tempArtifactFile.delete();
+				localArtifactFile.delete();
+			} catch {
+				try {
+					tempArtifactFile.delete();
+				} catch {
+					// ignore cleanup failure
+				}
+				throw error;
+			}
+			try {
+				tempArtifactFile.move(localArtifactFile);
+			} catch {
+				try {
+					tempArtifactFile.delete();
+				} catch {
+					// ignore cleanup failure
+				}
+				throw error;
+			}
+		}
+		const computedHash = await computeSha256Hash(localArtifactFile);
+		if (computedHash.toLowerCase() !== manifest.checksum.toLowerCase()) {
+			// Clean up corrupted artifact file before throwing
+			try {
+				localArtifactFile.delete();
 			} catch {
 				// ignore cleanup failure
 			}
-			throw error;
+			throw new Error(
+				`SHA-256 checksum mismatch for artifact ${manifest.artifactId}: expected ${manifest.checksum}, got ${computedHash}. The downloaded file may be corrupted or tampered.`,
+			);
 		}
+		writeArtifactPackageMarker(markerFile, {
+			checksum: manifest.checksum,
+			sourceKey: manifest.s3Key,
+			packageFormat: manifest.packageFormat,
+			sizeBytes: localArtifactFile.size,
+		});
+	} finally {
+		releaseSlot();
 	}
-	const computedHash = await computeSha256Hash(localArtifactFile);
-	if (computedHash.toLowerCase() !== manifest.checksum.toLowerCase()) {
-		// Clean up corrupted artifact file before throwing
-		try {
-			localArtifactFile.delete();
-		} catch {
-			// ignore cleanup failure
-		}
-		throw new Error(
-			`SHA-256 checksum mismatch for artifact ${manifest.artifactId}: expected ${manifest.checksum}, got ${computedHash}. The downloaded file may be corrupted or tampered.`,
-		);
-	}
-	writeArtifactPackageMarker(markerFile, {
-		checksum: manifest.checksum,
-		sourceKey: manifest.s3Key,
-		packageFormat: manifest.packageFormat,
-		sizeBytes: localArtifactFile.size,
-	});
 }
 
 async function computeSha256Hash(file: File): Promise<string> {

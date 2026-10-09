@@ -103,7 +103,11 @@ export function ModelPicker({
 							<Text style={styles.modalErrorText}>{catalogErrorMessage}</Text>
 						) : null}
 						{sortedModels.length === 0 && !catalogErrorMessage ? (
-							<View style={styles.emptyState}>
+							<View
+								style={styles.emptyState}
+								accessibilityRole="alert"
+								accessibilityLiveRegion="polite"
+							>
 								<Text style={styles.emptyStateText}>
 									No models available
 								</Text>
