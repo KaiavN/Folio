@@ -1,0 +1,56 @@
+import React, { useEffect, useRef } from "react";
+import { Animated, Easing, View } from "react-native";
+import { useColors } from "./colors.tsx";
+
+const PROGRESS_BAR_ANIMATION_DURATION_MS = 240;
+
+export function ProgressBar({ progress }: { progress: number }) {
+	const COLORS = useColors();
+	const clampedProgress = Math.min(Math.max(progress, 0), 1);
+	const animatedProgress = useRef(new Animated.Value(clampedProgress)).current;
+	const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+
+	useEffect(() => {
+		if (animationRef.current) {
+			animationRef.current.stop();
+		}
+		animationRef.current = Animated.timing(animatedProgress, {
+			toValue: clampedProgress,
+			duration: PROGRESS_BAR_ANIMATION_DURATION_MS,
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: false,
+		});
+		animationRef.current.start();
+		return () => {
+			if (animationRef.current) {
+				animationRef.current.stop();
+			}
+		};
+	}, [clampedProgress, animatedProgress]);
+
+	const width = animatedProgress.interpolate({
+		inputRange: [0, 1],
+		outputRange: ["0%", "100%"],
+	});
+
+	return (
+		<View
+			style={{
+				width: "100%",
+				height: 6,
+				borderRadius: 999,
+				overflow: "hidden",
+				backgroundColor: "rgba(255, 248, 235, 0.06)",
+			}}
+		>
+			<Animated.View
+				style={{
+					height: "100%",
+					borderRadius: 999,
+					backgroundColor: COLORS.accentPrimary,
+					width,
+				}}
+			/>
+		</View>
+	);
+}

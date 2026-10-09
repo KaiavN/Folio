@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Folio",
+    "slug": "folio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#151310"
+    },
+    "ios": {
+        "deploymentTarget": "17.0",
+        "supportsTablet": true,
+        "bundleIdentifier": "com.folio.mobile",
+        "splash": {
+          "backgroundColor": "#151310"
+        },
+        "infoPlist": {
+          "NSCameraUsageDescription": "Allow Folio to capture photos for multimodal model prompts.",
+          "NSPhotoLibraryUsageDescription": "Allow Folio to access photos that you choose for multimodal model prompts.",
+          "NSLocalNetworkUsageDescription": "Allow Folio to connect to your local development server while running development builds.",
+          "UIApplicationSceneManifest": {
+            "UIApplicationSupportsMultipleScenes": false
+          },
+          "NSBonjourServices": [
+            "_http._tcp"
+          ]
+        }
+      },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#151310"
+      },
+      "splash": {
+        "backgroundColor": "#151310"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.folio.mobile",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ],
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Folio to capture photos for multimodal model prompts.",
+          "photosPermission": "Allow Folio to access photos that you choose for multimodal model prompts."
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
