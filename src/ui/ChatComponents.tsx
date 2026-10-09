@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Animated,
 	Clipboard,
@@ -39,7 +39,7 @@ export const ChatBubble = memo(function ChatBubble({
 	message: ChatMessage;
 	userMaxWidth: number;
 	assistantMaxWidth: number;
-	onRetry?: () => void;
+	onRetry?: (messageId: string) => void;
 }) {
 	const isUser = message.role === "user";
 	const entrance = useRef(new Animated.Value(0)).current;
@@ -73,6 +73,10 @@ export const ChatBubble = memo(function ChatBubble({
 			}
 		};
 	}, [copied]);
+
+	const handleRetry = useCallback(() => {
+		if (onRetry) onRetry(message.id);
+	}, [onRetry, message.id]);
 
 	const animatedStyle = {
 		opacity: entrance,
@@ -135,7 +139,7 @@ export const ChatBubble = memo(function ChatBubble({
 					) : null}
 					{!isUser && message.failed && onRetry ? (
 						<Pressable
-							onPress={onRetry}
+							onPress={handleRetry}
 							accessibilityRole="button"
 							accessibilityLabel="Retry generating this reply"
 							style={({ pressed }) => [
