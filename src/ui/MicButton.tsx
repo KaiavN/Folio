@@ -16,8 +16,11 @@ export function MicButton({ speechState, onStartRecording, onStopRecording }: Pr
   const { status } = speechState;
   const isRecording = status === "recognizing";
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const mountedRef = useRef(true);
+  const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (isRecording) {
       const pulse = Animated.loop(
         Animated.sequence([
@@ -33,11 +36,16 @@ export function MicButton({ speechState, onStartRecording, onStopRecording }: Pr
           }),
         ]),
       );
+      pulseRef.current = pulse;
       pulse.start();
-      return () => pulse.stop();
     } else {
       pulseAnim.setValue(1);
     }
+    return () => {
+      mountedRef.current = false;
+      pulseRef.current?.stop();
+      pulseRef.current = null;
+    };
   }, [isRecording, pulseAnim]);
 
   function handlePress() {

@@ -185,6 +185,12 @@ class SpeechRecognitionService {
       } else {
         Voice.cancel();
       }
+      Voice.destroy();
+    } catch {
+      // ignore destroy errors
+    }
+    try {
+      Voice.cancel();
     } catch {
       // ignore cancel errors
     }

@@ -945,6 +945,7 @@ export default function App() {
 						text: notReadyText,
 						meta: "Model not ready",
 						streaming: false,
+						failed: false,
 					}),
 				);
 			} else {
@@ -1043,6 +1044,7 @@ export default function App() {
 							"\n\n*Calculating...*",
 						meta: "Using calculator...",
 						streaming: false,
+						failed: false,
 					}),
 				);
 
@@ -1066,6 +1068,7 @@ export default function App() {
 									text: stripSpecialTokens(chunk.accumulatedText),
 									meta: "Generating on-device...",
 									streaming: true,
+									failed: false,
 								}),
 							);
 						},
@@ -1101,16 +1104,15 @@ export default function App() {
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									preparedArtifact?.localUri ?? "artifact cache pending",
 								)}`
 							: formatGenerationMeta(
 									generation.backendId,
 									generation.turnIndex,
 									generation.tokensGenerated,
 									generation.telemetry,
-									preparedArtifact?.localUri ?? "artifact cache pending",
 								),
 					streaming: false,
+					failed: false,
 				}),
 			);
 		} catch (error) {
@@ -1929,7 +1931,7 @@ function formatRuntimeMeta(
 	backendId: string,
 	telemetry: TelemetrySnapshot,
 ): string {
-	return `${backendId.toUpperCase()} • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond.toFixed(1)} tok/s`;
+	return `${backendId.toUpperCase()} • ${telemetry.ttftMs ?? "?"}ms first token • ${telemetry.decodeTokensPerSecond?.toFixed(1) ?? "?"} tok/s`;
 }
 
 function formatGenerationMeta(
@@ -1937,9 +1939,8 @@ function formatGenerationMeta(
 	turnIndex: number,
 	tokensGenerated: number,
 	telemetry: TelemetrySnapshot,
-	_artifactPath: string,
 ): string {
-	return `${tokensGenerated} tokens • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond.toFixed(1)} tok/s`;
+	return `${tokensGenerated} tokens • ${telemetry.ttftMs}ms first token • ${telemetry.decodeTokensPerSecond?.toFixed(1) ?? "?"} tok/s`;
 }
 
 function stripSpecialTokens(text: string): string {
