@@ -362,17 +362,10 @@ export function inspectPreparedArtifact(
 
 	// Log detection path for debugging artifact cache misses
 	const logPrefix = `[inspectPreparedArtifact] model=${manifest.modelId} backend=${manifest.backendId} quantization=${manifest.quantization}`;
-	
+
 	const isValid = extractedArtifactDirectoryIsValid(extractedArtifactDirectory);
-	
+
 	if (!isValid) {
-		// Log why it's invalid for debugging
-		const manifestFile = new File(extractedArtifactDirectory, "folio-export-manifest.json");
-		const runtimeManifestFile = new File(extractedArtifactDirectory, ARTIFACT_RUNTIME_MANIFEST_FILE);
-		
-		// Check for .pte files as fallback detection
-		const hasPte = hasAnyPteFile(extractedArtifactDirectory);
-		
 		return null;
 	}
 
@@ -856,8 +849,8 @@ async function flattenSingleSubdirectory(destinationDirectory: Directory): Promi
 		return;
 	}
 
-	const subdir = entries[0] as Directory;
-	
+	const subdir = entries[0];
+
 	try {
 		const subdirEntries = subdir.list();
 		for (const entry of subdirEntries) {
@@ -871,7 +864,7 @@ async function flattenSingleSubdirectory(destinationDirectory: Directory): Promi
 		}
 		// Remove the now-empty subdirectory
 		subdir.delete();
-			} catch (error) {
+	} catch (error) {
 		// If flattening fails (e.g., name collision), log and continue without flattening.
 		// The original subdirectory layout will be used as-is.
 		console.warn(`[flattenSingleSubdirectory] failed to flatten: ${error instanceof Error ? error.message : String(error)}`);
@@ -978,7 +971,7 @@ function readExtractedArtifactManifest(
 		};
 	} catch (err) {
 		console.warn(
-			"[readExtractedArtifactManifest] failed to parse manifest JSON",
+			`[readExtractedArtifactManifest] failed to parse manifest JSON from ${sourceFile.uri}`,
 			err,
 		);
 		return null;
