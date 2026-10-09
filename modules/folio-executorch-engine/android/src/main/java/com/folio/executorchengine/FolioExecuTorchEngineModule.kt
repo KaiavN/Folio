@@ -16,6 +16,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -100,6 +102,7 @@ class FolioExecuTorchEngineModule : Module() {
   )
 
   private val sessions = ConcurrentHashMap<String, SessionState>()
+  private val imageExecutor = Executors.newSingleThreadExecutor()
   private val gemmaVisionTargetSize = 896
 
   @Volatile
@@ -122,6 +125,7 @@ class FolioExecuTorchEngineModule : Module() {
 
     OnDestroy {
       ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
+      imageExecutor.shutdown()
       sessions.values.forEach { session ->
         withContext(Dispatchers.IO) {
           session.module.stop()
@@ -581,7 +585,7 @@ class FolioExecuTorchEngineModule : Module() {
       name == "sentencepiece.bpe.model"
   }
 
-  private fun prepareInputsForGeneration(
+  private suspend fun prepareInputsForGeneration(
     session: SessionState,
     prompt: String,
     attachments: List<ChatAttachmentPayload>,
@@ -606,7 +610,7 @@ class FolioExecuTorchEngineModule : Module() {
         session.module.prefillPrompt(prefix)
         attachments.forEach { attachment ->
           session.module.prefillPrompt("<|image|>")
-          val imageTensor = loadNormalizedImage(attachment)
+          val imageTensor = loadNormalizedImageAsync(attachment).get()
           session.module.prefillImages(
             imageTensor.values,
             imageTensor.width,
@@ -624,7 +628,7 @@ class FolioExecuTorchEngineModule : Module() {
 
       PromptTemplate.PLAIN, PromptTemplate.CHATML -> {
         attachments.forEach { attachment ->
-          val imageTensor = loadNormalizedImage(attachment)
+          val imageTensor = loadNormalizedImageAsync(attachment).get()
           session.module.prefillImages(
             imageTensor.values,
             imageTensor.width,
@@ -707,7 +711,20 @@ class FolioExecuTorchEngineModule : Module() {
     }
   }
 
-  private fun loadNormalizedImage(attachment: ChatAttachmentPayload): ImageTensor {
+  private fun loadNormalizedImageAsync(attachment: ChatAttachmentPayload): CompletableFuture<ImageTensor> {
+    val future = CompletableFuture<ImageTensor>()
+    imageExecutor.execute {
+      try {
+        val tensor = loadNormalizedImageSync(attachment)
+        future.complete(tensor)
+      } catch (e: Exception) {
+        future.completeExceptionally(e)
+      }
+    }
+    return future
+  }
+
+  private fun loadNormalizedImageSync(attachment: ChatAttachmentPayload): ImageTensor {
     if (attachment.type != "image") {
       throw IllegalArgumentException("Only image attachments are supported.")
     }

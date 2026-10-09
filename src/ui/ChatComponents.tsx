@@ -46,12 +46,14 @@ export const ChatBubble = memo(function ChatBubble({
 	const [copied, setCopied] = useState(false);
 
 	useEffect(() => {
-		Animated.timing(entrance, {
+		const animation = Animated.timing(entrance, {
 			toValue: 1,
 			duration: MESSAGE_ENTRANCE_DURATION_MS,
 			easing: Easing.out(Easing.poly(4)),
 			useNativeDriver: true,
-		}).start();
+		});
+		animation.start();
+		return () => animation.stop();
 	}, [entrance]);
 
 	const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,49 +267,45 @@ export const MessageText = memo(function MessageText({
 // --- TypingDots ---
 
 export function TypingDots() {
+	const mountedRef = useRef(true);
 	const bounce1 = useRef(new Animated.Value(0)).current;
 	const bounce2 = useRef(new Animated.Value(0)).current;
 	const bounce3 = useRef(new Animated.Value(0)).current;
 
 	useEffect(() => {
-		const cancelled = { value: false };
+		mountedRef.current = true;
 		const loopRef = { current: null as Animated.CompositeAnimation | null };
-		let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
-		function startAnimation() {
-			AccessibilityInfo.isReduceMotionEnabled().then((isReduceMotionEnabled) => {
-				if (cancelled.value || isReduceMotionEnabled) return;
-				const loop = Animated.loop(
-					Animated.stagger(
-						TYPING_DOTS_STAGGER_MS,
-						[bounce1, bounce2, bounce3].map((bounce) =>
-							Animated.sequence([
-								Animated.spring(bounce, {
-									toValue: 1,
-									damping: SPRING_DAMPING,
-									stiffness: SPRING_STIFFNESS,
-									useNativeDriver: true,
-								}),
-								Animated.spring(bounce, {
-									toValue: 0,
-									damping: SPRING_DAMPING,
-									stiffness: SPRING_STIFFNESS,
-									useNativeDriver: true,
-								}),
-							]),
-						),
+		AccessibilityInfo.isReduceMotionEnabled().then((isReduceMotionEnabled) => {
+			if (!mountedRef.current || isReduceMotionEnabled) return;
+			const loop = Animated.loop(
+				Animated.stagger(
+					TYPING_DOTS_STAGGER_MS,
+					[bounce1, bounce2, bounce3].map((bounce) =>
+						Animated.sequence([
+							Animated.spring(bounce, {
+								toValue: 1,
+								damping: SPRING_DAMPING,
+								stiffness: SPRING_STIFFNESS,
+								useNativeDriver: true,
+							}),
+							Animated.spring(bounce, {
+								toValue: 0,
+								damping: SPRING_DAMPING,
+								stiffness: SPRING_STIFFNESS,
+								useNativeDriver: true,
+							}),
+						]),
 					),
-				);
-				loopRef.current = loop;
-				loop.start();
-			});
-		}
+				),
+			);
+			loopRef.current = loop;
+			loop.start();
+		});
 
-		startAnimation();
 		return () => {
-			cancelled.value = true;
+			mountedRef.current = false;
 			loopRef.current?.stop();
-			if (pendingTimeout) clearTimeout(pendingTimeout);
 		};
 	}, [bounce1, bounce2, bounce3]);
 

@@ -2,13 +2,12 @@ import React, { useCallback, useEffect, useRef } from "react";
 import {
 	Platform,
 	Pressable,
-	FlatList,
+	ScrollView,
 	StyleSheet,
 	Text,
 	TextInput,
 	View,
 	useWindowDimensions,
-	ActivityIndicator,
 } from "react-native";
 
 import type { ChatAttachment, ChatMessage, SpeechRecognitionState } from "../../engine/types.ts";
@@ -125,7 +124,7 @@ export function ChatScreen({
 			? Math.min(560, screenWidth * 0.65)
 			: Math.min(320, screenWidth * 0.85));
 
-	const messagesScrollRef = useRef<FlatList | null>(null);
+	const messagesScrollRef = useRef<ScrollView | null>(null);
 
 	// Auto-scroll when messages or busyAction changes
 	useEffect(() => {
@@ -143,7 +142,11 @@ export function ChatScreen({
 		[onRetryMessage],
 	);
 
-	// Memoized starter prompt handler
+	// Stable per-message onRetry — memoized by message id so ChatBubble re-renders are avoided
+	const getRetryHandler = useCallback(
+		(messageId: string) => () => handleRetry(messageId),
+		[handleRetry],
+	);
 	const handleStarterPrompt = useCallback(
 		(prompt: string) => {
 			runSelectionHaptic();
@@ -226,6 +229,11 @@ export function ChatScreen({
 							userMaxWidth={userBubbleMaxWidth}
 							assistantMaxWidth={assistantBubbleMaxWidth}
 							onRetry={handleRetry}
+							onRetry={
+								message.role === "assistant" && message.failed
+									? getRetryHandler(message.id)
+									: undefined
+							}
 						/>
 					))}
 
